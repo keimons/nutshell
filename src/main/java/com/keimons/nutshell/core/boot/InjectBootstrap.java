@@ -1,0 +1,23 @@
+package com.keimons.nutshell.core.boot;
+
+import com.keimons.nutshell.core.Context;
+import com.keimons.nutshell.core.assembly.Assembly;
+import com.keimons.nutshell.core.assembly.AutolinkFactory;
+
+/**
+ * 注入
+ * <p>
+ * 注入的可能是真实的对象，也有可能是{@link AutolinkFactory}生成的自动链接。
+ * 引导完成{@link Assembly}中注入点的注入。
+ *
+ * @author houyn[monkey@keimons.com]
+ * @version 1.0
+ * @since 9
+ */
+public class InjectBootstrap implements Bootstrap {
+
+	@Override
+	public void invoke(Context context, Mode mode, Assembly assembly) throws Throwable {
+		assembly.inject(context);
+	}
+}
