@@ -1,11 +1,12 @@
-package com.keimons.nutshell.core.boot;
+package com.keimons.nutshell.core.bootstrap;
 
+import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.Context;
 import com.keimons.nutshell.core.assembly.Assembly;
-import com.keimons.nutshell.core.internal.ConsumerUtils;
-import com.keimons.nutshell.core.internal.InternalClassUtils;
+import com.keimons.nutshell.core.internal.utils.ConsumerUtils;
+import com.keimons.nutshell.core.internal.utils.NClassUtils;
 
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -20,21 +21,27 @@ import java.util.function.Consumer;
 public class InitBootstrap implements Bootstrap {
 
 	@Override
-	public void invoke(Context context, Mode mode, Assembly assembly) throws Throwable {
+	public void setup(ApplicationContext context, Assembly assembly) throws Throwable {
 		context.getAssemblies().values().stream()
 				.flatMap(item -> item.findInjections(Autolink.class).stream())
 				.map(Class::getName).forEach(consumer(context, assembly))
 		;
 	}
 
-	private Consumer<String> consumer(Context context, Assembly assembly) throws Throwable {
+	@Override
+	public void update(ApplicationContext context, Assembly assembly) throws Throwable {
+		setup(context, assembly);
+	}
+
+	private Consumer<String> consumer(ApplicationContext context, Assembly assembly) throws Throwable {
 		return ConsumerUtils.wrapper(injectName -> {
-			Class<?> injectType = assembly.getClass(injectName);
+			Map<String, Class<?>> classes = assembly.getClasses();
+			Class<?> injectType = classes.get(injectName);
 			if (injectType == null) {
 				return;
 			}
 			// find inject type's implement in assembly.
-			Class<?> implement = InternalClassUtils.findImplement(assembly.getClasses(), injectType);
+			Class<?> implement = NClassUtils.findImplement(classes.values(), injectType);
 			if (implement == null) {
 				// ignore
 				return;

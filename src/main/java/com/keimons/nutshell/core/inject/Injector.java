@@ -1,7 +1,7 @@
 package com.keimons.nutshell.core.inject;
 
+import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.Context;
 import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.assembly.AutolinkFactory;
 
@@ -79,7 +79,7 @@ class Injector {
 	 * @param instance 被注入的对象
 	 * @throws Throwable 注入失败
 	 */
-	public void inject(Context context, Assembly imports, Object instance) throws Throwable {
+	public void inject(ApplicationContext context, Assembly imports, Object instance) throws Throwable {
 		Objects.requireNonNull(instance);
 		Assembly exports = context.findInstance(injectType.getName());
 		Object proxy = AutolinkFactory.create(imports, exports, injectType);

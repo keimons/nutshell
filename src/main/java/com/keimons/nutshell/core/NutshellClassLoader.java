@@ -1,12 +1,10 @@
 package com.keimons.nutshell.core;
 
-import java.io.IOException;
+import com.keimons.nutshell.core.internal.utils.CleanerUtils;
+
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -18,40 +16,19 @@ import java.util.Set;
  **/
 public class NutshellClassLoader extends URLClassLoader {
 
-	/**
-	 * 类加载器名字
-	 */
-	private final String name;
+	private final LoadStrategy strategy;
 
-	/**
-	 * 程序集
-	 */
-	private String assembly;
-
-	private final Set<String> classNames = new HashSet<String>();
-
-	private Set<String> LOCAL = Collections.singleton("com.keimons.nutshell.core.assembly.DynamicLinkProxy");
+	private final ClassLoader parent;
 
 	/**
 	 * 构造方法
 	 *
 	 * @param name 类装载器的名字
 	 */
-	public NutshellClassLoader(String name, String... classNames) {
-		super(new URL[]{}, null);
-		this.name = name;
-		this.classNames.addAll(List.of(classNames));
-	}
-
-	/**
-	 * 构造方法
-	 *
-	 * @param name 类装载器的名字
-	 */
-	public NutshellClassLoader(String name, List<String> classNames) {
-		super(new URL[]{}, null);
-		this.name = name;
-		this.classNames.addAll(classNames);
+	public NutshellClassLoader(String name, ClassLoader parent, String... classNames) {
+		super(name, new URL[]{}, null);
+		this.parent = parent;
+		this.strategy = new ClassNamesPolicy(Set.of(classNames));
 	}
 
 	/**
@@ -60,62 +37,71 @@ public class NutshellClassLoader extends URLClassLoader {
 	 * @param parent 父类加载
 	 * @param name   类装载器的名字
 	 */
-	public NutshellClassLoader(ClassLoader parent, String name) {
-		super(new URL[]{NutshellClassLoader.class.getResource("")}, parent);
-		this.name = name;
-	}
-
-	/**
-	 * 构造方法
-	 *
-	 * @param parent 父类加载
-	 * @param name   类装载器的名字
-	 */
-	public NutshellClassLoader(URL[] urls, java.lang.ClassLoader parent, String name) {
-		super(urls, parent);
-		this.name = name;
+	public NutshellClassLoader(String name, ClassLoader parent, String packageName) {
+		super(name, new URL[]{}, null);
+		this.parent = parent;
+		this.strategy = new PackagePolicy(packageName);
 	}
 
 	@Override
 	protected Class<?> findClass(String className) throws ClassNotFoundException {
-		if (!classNames.contains(className) && !LOCAL.contains(className)) {
-			return Class.forName(className);
-		}
-		try {
-			String fileName = "/" + className.replaceAll("\\.", "/") + ".class";
-			InputStream is = getClass().getResourceAsStream(fileName);
-			byte[] b = new byte[is.available()];
-			is.read(b);
-			return defineClass(className, b, 0, b.length);
-		} catch (IOException e) {
-			throw new ClassNotFoundException(className);
+		if (strategy.test(className)) {
+			try {
+				String fileName = "/" + className.replaceAll("\\.", "/") + ".class";
+				InputStream is = getClass().getResourceAsStream(fileName);
+				if (is == null) {
+					throw new ClassNotFoundException(className);
+				}
+				byte[] b = new byte[is.available()];
+				int read = is.read(b);
+				if (b.length != read) {
+					throw new ClassNotFoundException(className);
+				}
+				Class<?> clazz = defineClass(className, b, 0, b.length);
+				CleanerUtils.register(clazz);
+				return clazz;
+			} catch (Exception e) {
+				throw new ClassNotFoundException(className, e);
+			}
+		} else {
+			return Class.forName(className, true, parent);
 		}
 	}
 
-	@Override
-	public String toString() {
-		return this.name;
-	}
-
-	/**
-	 * 定位基于当前上下文的父类加载器
-	 *
-	 * @return 返回可用的父类加载器.
-	 */
-	private static ClassLoader findParentClassLoader() {
-		ClassLoader parent = NutshellClassLoader.class.getClassLoader();
-		if (parent == null) {
-			parent = ClassLoader.getSystemClassLoader();
-		}
+	public ClassLoader getParentClassLoader() {
 		return parent;
 	}
 
-	@Override
-	public String getName() {
-		return name;
+	private interface LoadStrategy {
+
+		boolean test(String className);
 	}
 
-	public Set<String> getClassNames() {
-		return classNames;
+	private static class PackagePolicy implements LoadStrategy {
+
+		private final String packageName;
+
+		public PackagePolicy(String packageName) {
+			this.packageName = packageName;
+		}
+
+		@Override
+		public boolean test(String className) {
+			return className.startsWith(packageName);
+		}
+	}
+
+	private static class ClassNamesPolicy implements LoadStrategy {
+
+		private final Set<String> classNames;
+
+		public ClassNamesPolicy(Set<String> packageName) {
+			this.classNames = packageName;
+		}
+
+		@Override
+		public boolean test(String className) {
+			return classNames.contains(className);
+		}
 	}
 }

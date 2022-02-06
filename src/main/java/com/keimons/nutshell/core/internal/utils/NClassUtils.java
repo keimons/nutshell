@@ -1,4 +1,4 @@
-package com.keimons.nutshell.core.internal;
+package com.keimons.nutshell.core.internal.utils;
 
 import java.io.File;
 import java.io.IOException;
@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
  * @version 1.0
  * @since 11
  */
-public class InternalClassUtils {
+public class NClassUtils {
 
 	/**
 	 * 判断一个类是否是一个普通类
@@ -49,19 +49,19 @@ public class InternalClassUtils {
 			String info = "target class " + target.getSimpleName() + " not interface";
 			throw new IllegalStateException(info);
 		}
-		return InternalClassUtils.findClasses(packageName, (ClassLoader) null).stream()
+		return NClassUtils.findClasses((ClassLoader) null, packageName, true).stream()
 				.filter(target::isAssignableFrom)
-				.filter(InternalClassUtils::isNormalClass)
+				.filter(NClassUtils::isNormalClass)
 				.map(clazz -> (Class<T>) clazz)
 				.collect(Collectors.toList());
 	}
 
 	/**
-	 * 查找实现类
+	 * Find the implement class of the interface in {@code classes}, ignore the class loader.
 	 *
-	 * @param classes 查找范围
-	 * @param inf     实现类的接口
-	 * @return 实现类
+	 * @param classes the classes to search
+	 * @param inf     the interface to find
+	 * @return the implement class
 	 */
 	public static Class<?> findImplement(Collection<Class<?>> classes, Class<?> inf) {
 		if (!Modifier.isInterface(inf.getModifiers())) {
@@ -71,7 +71,7 @@ public class InternalClassUtils {
 		String name = inf.getName();
 		for (Class<?> clazz : classes) {
 			for (Class<?> ci : clazz.getInterfaces()) {
-				if (ci.getName().equals(name)) {
+				if (ci.getName().equalsIgnoreCase(name)) {
 					return clazz;
 				}
 			}
@@ -149,9 +149,9 @@ public class InternalClassUtils {
 	@SuppressWarnings("unchecked")
 	public static <T> List<Class<T>> findClasses(
 			String packageName, Class<? extends Annotation> annotation) {
-		return InternalClassUtils.findClasses(packageName, (ClassLoader) null).stream()
+		return NClassUtils.findClasses(null, packageName, true).stream()
 				.filter(clazz -> clazz.isAnnotationPresent(annotation))
-				.filter(InternalClassUtils::isNormalClass)
+				.filter(NClassUtils::isNormalClass)
 				.map(clazz -> (Class<T>) clazz)
 				.collect(Collectors.toList());
 	}
@@ -159,10 +159,12 @@ public class InternalClassUtils {
 	/**
 	 * 从包package中获取所有的Class
 	 *
-	 * @param pack 包名
+	 * @param loader       使用的类装载器
+	 * @param pack         包名
+	 * @param subdirectory 是否包含子目录
 	 * @return 该包下所有的class文件
 	 */
-	public static Set<Class<?>> findClasses(String pack, ClassLoader loader) {
+	public static Set<Class<?>> findClasses(ClassLoader loader, final String pack, boolean subdirectory) {
 		loader = loader == null ? Thread.currentThread().getContextClassLoader() : loader;
 		// 第一个class类的集合
 		Set<Class<?>> classes = new LinkedHashSet<>();
@@ -184,7 +186,7 @@ public class InternalClassUtils {
 					// 获取包的物理路径
 					String filePath = URLDecoder.decode(url.getFile(), StandardCharsets.UTF_8);
 					// 以文件的方式扫描整个包下的文件 并添加到集合中
-					findAndAddClassesInPackageByFile(loader, pack, filePath, classes);
+					findAndAddClassesInPackageByFile(loader, pack, filePath, classes, subdirectory, pack);
 				} else if ("jar".equals(protocol)) {
 					// 如果是jar包文件
 					// 定义一个JarFile
@@ -214,7 +216,7 @@ public class InternalClassUtils {
 								}
 								// 如果可以迭代下去 并且是一个包
 								// 如果是一个.class文件 而且不是目录
-								if (name.endsWith(".class") && !entry.isDirectory()) {
+								if (name.endsWith(".class") && !entry.isDirectory() && (subdirectory || packageName.equals(pack))) {
 									// 去掉后面的".class" 获取真正的类名
 									String className = name.substring(packageName.length() + 1, name.length() - 6);
 									try {
@@ -241,15 +243,19 @@ public class InternalClassUtils {
 	/**
 	 * 以文件的形式来获取包下的所有Class
 	 *
-	 * @param packageName 包名称
-	 * @param packagePath 包路径
-	 * @param classes     文件
+	 * @param packageName  包名称
+	 * @param packagePath  包路径
+	 * @param classes      文件
+	 * @param subdirectory
+	 * @param pack
 	 */
 	private static void findAndAddClassesInPackageByFile(
 			ClassLoader loader,
 			String packageName,
 			String packagePath,
-			Set<Class<?>> classes) {
+			Set<Class<?>> classes,
+			boolean subdirectory,
+			final String pack) {
 		// 获取此包的目录 建立一个File
 		File dir = new File(packagePath);
 		// 如果不存在或者 也不是目录就直接返回
@@ -264,20 +270,22 @@ public class InternalClassUtils {
 			// 如果是目录 则继续扫描
 			if (file.isDirectory()) {
 				if (packageName.equals("")) {
-					findAndAddClassesInPackageByFile(loader, file.getName(), file.getAbsolutePath(), classes);
+					findAndAddClassesInPackageByFile(loader, file.getName(), file.getAbsolutePath(), classes, subdirectory, pack);
 				} else {
-					findAndAddClassesInPackageByFile(loader, packageName + "." + file.getName(), file.getAbsolutePath(), classes);
+					findAndAddClassesInPackageByFile(loader, packageName + "." + file.getName(), file.getAbsolutePath(), classes, subdirectory, pack);
 				}
 			} else {
-				// 如果是java类文件 去掉后面的.class 只留下类名
-				String className = file.getName().substring(0, file.getName().length() - 6);
-				try {
-					// 添加到集合中去
-					// classes.add(Class.forName(packageName + '.' + className));
-					// 这里用forName有一些不好，会触发static方法，没有使用classLoader的load干净
-					classes.add(loader.loadClass(packageName + '.' + className));
-				} catch (ClassNotFoundException e) {
-					e.printStackTrace();
+				if (subdirectory || pack.equals(packageName)) {
+					// 如果是java类文件 去掉后面的.class 只留下类名
+					String className = file.getName().substring(0, file.getName().length() - 6);
+					try {
+						// 添加到集合中去
+						// classes.add(Class.forName(packageName + '.' + className));
+						// 这里用forName有一些不好，会触发static方法，没有使用classLoader的load干净
+						classes.add(loader.loadClass(packageName + '.' + className));
+					} catch (ClassNotFoundException e) {
+						e.printStackTrace();
+					}
 				}
 			}
 		}

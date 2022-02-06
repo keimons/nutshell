@@ -1,4 +1,4 @@
-package com.keimons.nutshell.core.internal;
+package com.keimons.nutshell.core.internal.utils;
 
 import jdk.internal.misc.Unsafe;
 

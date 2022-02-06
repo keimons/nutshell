@@ -1,13 +1,20 @@
 package com.keimons.nutshell.core.assembly;
 
+import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.Context;
 import com.keimons.nutshell.core.NutshellClassLoader;
 import com.keimons.nutshell.core.inject.Injectors;
-import com.keimons.nutshell.core.internal.InternalClassUtils;
+import com.keimons.nutshell.core.internal.namespace.DefaultNamespace;
+import com.keimons.nutshell.core.internal.namespace.Namespace;
+import com.keimons.nutshell.core.internal.namespace.PackageNamespace;
+import com.keimons.nutshell.core.internal.utils.NClassUtils;
 
 import java.lang.annotation.Annotation;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 程序集
@@ -45,6 +52,11 @@ import java.util.*;
 public class Assembly {
 
 	/**
+	 * 根
+	 */
+	public static final String ROOT = "ROOT";
+
+	/**
 	 * 名称
 	 * <p>
 	 * 名称是{@code Assembly}的唯一标识。在整个生存周期中，只有名称是一定不变的，
@@ -57,7 +69,7 @@ public class Assembly {
 	/**
 	 * 已装载的{@code Assembly}
 	 */
-	private AbstractInnerAssembly assembly;
+	private Namespace namespace;
 
 	/**
 	 * 监听器
@@ -67,9 +79,9 @@ public class Assembly {
 
 	private int version;
 
-	public Assembly(String name, AbstractInnerAssembly assembly) {
+	public Assembly(String name, Namespace namespace) {
 		this.name = name;
-		this.assembly = assembly;
+		this.namespace = namespace;
 	}
 
 	public int version() {
@@ -84,30 +96,27 @@ public class Assembly {
 		}
 	}
 
-	public Collection<Class<?>> getClasses() {
-		return assembly.getClasses();
-	}
-
-	public Class<?> getClass(String className) {
-		return assembly.getClass(className);
+	public Map<String, Class<?>> getClasses() {
+		return namespace.getClasses();
 	}
 
 	public Set<Class<?>> findInjections(Class<? extends Annotation> annotation) {
-		return assembly.findInjections(annotation);
+		return NClassUtils.findInjections(namespace.getClasses().values(), annotation);
 	}
 
 	public Object getInstance(String interfaceName) {
-		return assembly.getInstance(interfaceName);
+		Map<String, Object> exports = namespace.getExports();
+		return exports.get(interfaceName);
 	}
 
 	public void registerInstance(String interfaceName, Object instance) {
-		assembly.registerInstance(interfaceName, instance);
+		namespace.getExports().put(interfaceName, instance);
 	}
 
-	public void inject(Context context) throws Throwable {
-		Collection<Object> instances = assembly.getInstances();
-		for (Object instance : instances) {
-			if (InternalClassUtils.hasAnnotation(instance.getClass(), Autolink.class)) {
+	public void inject(ApplicationContext context) throws Throwable {
+		Map<String, Object> instances = namespace.getExports();
+		for (Object instance : instances.values()) {
+			if (NClassUtils.hasAnnotation(instance.getClass(), Autolink.class)) {
 				Injectors injectors = Injectors.of(instance.getClass(), Autolink.class);
 				injectors.inject(context, this, instance);
 				System.out.println("inject instance: " + instance.getClass());
@@ -115,9 +124,14 @@ public class Assembly {
 		}
 	}
 
-	public void reset(String... classNames) {
-		installs.clear();
-		assembly = new ClassedInnerAssembly(new NutshellClassLoader(name, classNames), List.of(classNames));
+	public void reset() {
+		if (this.namespace instanceof PackageNamespace) {
+			installs.clear();
+			PackageNamespace namespace = (PackageNamespace) this.namespace;
+			ClassLoader classLoader = this.namespace.getClassLoader();
+			ClassLoader parent = classLoader instanceof NutshellClassLoader ? ((NutshellClassLoader) classLoader).getParentClassLoader() : classLoader.getParent();
+			this.namespace = new PackageNamespace(new NutshellClassLoader(name, parent, namespace.getPackageName()), namespace.getPackageName());
+		}
 	}
 
 	/**
@@ -129,18 +143,20 @@ public class Assembly {
 		return name;
 	}
 
-	public static Assembly root(Object root) {
-		return new Assembly("root", new RootInnerAssembly(root));
+	public static Assembly of(Object object) {
+		ClassLoader classLoader = object.getClass().getClassLoader();
+		String packageName = object.getClass().getPackageName();
+		Set<Class<?>> set = NClassUtils.findClasses(classLoader, packageName, false);
+		Map<String, Class<?>> classes = set.stream().collect(Collectors.toMap(Class::getName, cls -> cls));
+		Namespace namespace = new DefaultNamespace(classLoader, classes);
+		namespace.getExports().put(ROOT, object);
+		return new Assembly(ROOT, namespace);
 	}
 
-	public static Assembly of(String name, String... classNames) {
-		NutshellClassLoader loader = new NutshellClassLoader(name, classNames);
-		return of(name, loader, List.of(classNames));
-	}
-
-	static Assembly of(String name, ClassLoader loader, List<String> classNames) {
-		ClassedInnerAssembly inner = new ClassedInnerAssembly(loader, classNames);
-		return new Assembly(name, inner);
+	public static Assembly of(ClassLoader parent, String packageName) {
+		NutshellClassLoader classLoader = new NutshellClassLoader(packageName, parent, packageName);
+		Namespace namespace = new PackageNamespace(classLoader, packageName);
+		return new Assembly(packageName, namespace);
 	}
 
 	public void linkInstalls() throws Throwable {
@@ -155,132 +171,8 @@ public class Assembly {
 		}
 	}
 
-	private static abstract class AbstractInnerAssembly {
-
-		abstract List<String> getClassNames();
-
-		public abstract Collection<Class<?>> getClasses();
-
-		public abstract Class<?> getClass(String className);
-
-		public abstract Set<Class<?>> findInjections(Class<? extends Annotation> annotation);
-
-		public abstract Collection<Object> getInstances();
-
-		public abstract Object getInstance(String interfaceName);
-
-		public abstract void registerInstance(String interfaceName, Object instance);
-	}
-
-	private static class RootInnerAssembly extends AbstractInnerAssembly {
-
-		Object root;
-
-		public RootInnerAssembly(Object root) {
-			this.root = root;
-		}
-
-		@Override
-		List<String> getClassNames() {
-			return Collections.singletonList(root.getClass().getName());
-		}
-
-		@Override
-		public Collection<Class<?>> getClasses() {
-			return Collections.singleton(root.getClass());
-		}
-
-		@Override
-		public Class<?> getClass(String className) {
-			if (root.getClass().getName().equals(className)) {
-				return root.getClass();
-			}
-			return null;
-		}
-
-		@Override
-		public Set<Class<?>> findInjections(Class<? extends Annotation> annotation) {
-			return InternalClassUtils.findInjections(Collections.singleton(root.getClass()), annotation);
-		}
-
-		@Override
-		public Collection<Object> getInstances() {
-			return Collections.singleton(root);
-		}
-
-		@Override
-		public Object getInstance(String interfaceName) {
-			return null;
-		}
-
-		@Override
-		public void registerInstance(String interfaceName, Object instance) {
-			throw new UnsupportedOperationException();
-		}
-	}
-
-	private static class ClassedInnerAssembly extends AbstractInnerAssembly {
-
-		protected List<String> classNames;
-
-		Map<String, Class<?>> classes;
-
-		protected ClassLoader loader;
-
-		private Set<Class<?>> injections;
-
-		private Map<String, Object> instances = new HashMap<>();
-
-		public ClassedInnerAssembly(ClassLoader loader, List<String> classNames) {
-			this.loader = loader;
-			this.classNames = classNames;
-			this.classes = new HashMap<>(classNames.size());
-			for (String className : classNames) {
-				try {
-					classes.put(className, loader.loadClass(className));
-				} catch (ClassNotFoundException e) {
-					e.printStackTrace();
-				}
-			}
-		}
-
-		@Override
-		List<String> getClassNames() {
-			return classNames;
-		}
-
-		@Override
-		public Collection<Class<?>> getClasses() {
-			return classes.values();
-		}
-
-		@Override
-		public Class<?> getClass(String className) {
-			return classes.get(className);
-		}
-
-		@Override
-		public Set<Class<?>> findInjections(Class<? extends Annotation> annotation) {
-			if (injections == null) {
-				injections = InternalClassUtils.findInjections(classes.values(), annotation);
-			}
-			return injections;
-		}
-
-		@Override
-		public Collection<Object> getInstances() {
-			return instances.values();
-		}
-
-		@Override
-		public Object getInstance(String interfaceName) {
-			return instances.get(interfaceName);
-		}
-
-		@Override
-		public void registerInstance(String interfaceName, Object instance) {
-			instances.put(interfaceName, instance);
-		}
+	public Namespace getNamespace() {
+		return namespace;
 	}
 
 	@Override

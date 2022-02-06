@@ -1,6 +1,6 @@
-package com.keimons.nutshell.core.boot;
+package com.keimons.nutshell.core.bootstrap;
 
-import com.keimons.nutshell.core.Context;
+import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.assembly.AutolinkFactory;
 
@@ -17,7 +17,12 @@ import com.keimons.nutshell.core.assembly.AutolinkFactory;
 public class InjectBootstrap implements Bootstrap {
 
 	@Override
-	public void invoke(Context context, Mode mode, Assembly assembly) throws Throwable {
+	public void setup(ApplicationContext context, Assembly assembly) throws Throwable {
+		assembly.inject(context);
+	}
+
+	@Override
+	public void update(ApplicationContext context, Assembly assembly) throws Throwable {
 		assembly.inject(context);
 	}
 }

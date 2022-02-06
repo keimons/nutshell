@@ -1,7 +1,7 @@
 package com.keimons.nutshell.core.inject;
 
+import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.Context;
 import com.keimons.nutshell.core.assembly.Assembly;
 
 import java.lang.annotation.Annotation;
@@ -66,6 +66,7 @@ public class Injectors {
 	 * @return 注入器集合
 	 * @throws Exception 注入器集合生成异常
 	 */
+	@SafeVarargs
 	public static Injectors of(Class<?> clazz, Class<? extends Annotation>... annotations) throws Exception {
 		Objects.requireNonNull(clazz);
 		Objects.requireNonNull(annotations);
@@ -100,7 +101,7 @@ public class Injectors {
 	 * @param instance 对其中所有的注入点进行注入
 	 * @throws Throwable 注入失败
 	 */
-	public void inject(Context context, Assembly imports, Object instance) throws Throwable {
+	public void inject(ApplicationContext context, Assembly imports, Object instance) throws Throwable {
 		for (Injector injector : injectors) {
 			injector.inject(context, imports, instance);
 		}
