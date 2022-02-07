@@ -1,11 +1,11 @@
 package com.keimons.nutshell.test.link.module2;
 
 /**
- * Module2Service
+ * 模拟模块2
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
 public class Module2Service implements Module2Sharable {
 

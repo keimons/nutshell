@@ -1,6 +1,6 @@
 package com.keimons.nutshell.core.assembly;
 
-import com.keimons.nutshell.core.Installable;
+import com.keimons.nutshell.core.Hotswappable;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -12,12 +12,14 @@ import java.util.Objects;
  * 自动链接的代理
  * <p>
  * 注入的对象，并不是真正的对象，而是对象的一个代理。
+ * 尽管看似是相同的两个对象，但由于类装载器的不同，会造成{@code com.keimons.nutshell.Object}不等于
+ * {@code com.keimons.nutshell.Object}。因为它们不属于同一个类装载器。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
-public class AutolinkProxy implements Installable, InvocationHandler {
+public class AutolinkProxy implements Hotswappable, InvocationHandler {
 
 	private final String interfaceName;
 
@@ -31,7 +33,7 @@ public class AutolinkProxy implements Installable, InvocationHandler {
 	}
 
 	@Override
-	public void install(Object instance) throws Throwable {
+	public void hotswap(Object instance) throws Throwable {
 		Map<String, Method> methods = new HashMap<>();
 		for (Method method : instance.getClass().getInterfaces()[0].getDeclaredMethods()) {
 			methods.put(method.getName(), method);
@@ -52,8 +54,14 @@ public class AutolinkProxy implements Installable, InvocationHandler {
 	 */
 	private static class Node {
 
+		/**
+		 * 真实的引用的对象
+		 */
 		private final Object instance;
 
+		/**
+		 * 方法映射
+		 */
 		private final Map<String, Method> methods;
 
 		public Node(Object instance, Map<String, Method> methods) {

@@ -1,7 +1,7 @@
 package com.keimons.nutshell.core.assembly;
 
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.Installable;
+import com.keimons.nutshell.core.Hotswappable;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
@@ -11,7 +11,7 @@ import java.lang.reflect.Proxy;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
 public class AutolinkFactory {
 
@@ -42,13 +42,13 @@ public class AutolinkFactory {
 		final ClassLoader loader = inf.getClassLoader();
 		Class<?> proxyClass = loader.loadClass("com.keimons.nutshell.core.assembly.AutolinkProxy");
 		Object proxy = proxyClass.getConstructor(String.class).newInstance(interfaceName);
-		exports.addListener(Listener.ListenerType.UPGRADE, () -> {
-			Object instance = exports.getInstance(interfaceName);
-			((Installable) proxy).install(instance);
-		});
 		imports.addListener(Listener.ListenerType.INSTALL, () -> {
 			Object instance = exports.getInstance(interfaceName);
-			((Installable) proxy).install(instance);
+			((Hotswappable) proxy).hotswap(instance);
+		});
+		exports.addListener(Listener.ListenerType.HOTSWAP, () -> {
+			Object instance = exports.getInstance(interfaceName);
+			((Hotswappable) proxy).hotswap(instance);
 		});
 		return Proxy.newProxyInstance(loader, new Class[]{inf}, (InvocationHandler) proxy);
 	}

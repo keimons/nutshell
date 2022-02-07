@@ -23,7 +23,7 @@ import java.util.Map;
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @see NutshellClassLoader 类装载器
- * @since 9
+ * @since 11
  **/
 public interface Namespace {
 

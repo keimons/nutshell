@@ -8,13 +8,13 @@ import com.keimons.nutshell.core.Autolink;
  * 每一个{@link Autolink}都会注册两个监听器，用于监听{@link Assembly}的安装、更新和卸载。监听器有两种类型：
  * <ul>
  *     <li>{@link ListenerType#INSTALL}安装</li>
- *     <li>{@link ListenerType#UPGRADE}升级</li>
+ *     <li>{@link ListenerType#HOTSWAP}升级</li>
  * </ul>
  * 当发生{@link Assembly}安装、更新和卸载时，相关联的{@link Assembly}也需要进行相应的更新。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
 @FunctionalInterface
 public interface Listener {
@@ -30,6 +30,6 @@ public interface Listener {
 	 * 监听类型
 	 */
 	enum ListenerType {
-		INSTALL, UPGRADE
+		INSTALL, HOTSWAP
 	}
 }

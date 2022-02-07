@@ -10,7 +10,7 @@ import java.util.List;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
 public class NutshellApplication {
 
@@ -39,11 +39,11 @@ public class NutshellApplication {
 
 	public void update(String packageName) throws Throwable {
 		Assembly assembly = context.get(packageName);
-		installer.update(context, assembly);
+		installer.hotswap(context, assembly);
 	}
 
 	public void update(List<Assembly> assemblies) throws Throwable {
-		installer.update(context, assemblies);
+		installer.hotswap(context, assemblies);
 	}
 
 	public ApplicationContext getContext() {

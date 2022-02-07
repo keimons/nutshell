@@ -5,7 +5,14 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
-public class PackageUtilTest {
+/**
+ * {@link PackageUtils}测试
+ *
+ * @author houyn[monkey@keimons.com]
+ * @version 1.0
+ * @since 11
+ **/
+public class PackageUtilsTest {
 
 	@Test
 	public void test() {

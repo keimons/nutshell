@@ -3,8 +3,8 @@ package com.keimons.nutshell.core.bootstrap;
 import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
 import com.keimons.nutshell.core.assembly.Assembly;
+import com.keimons.nutshell.core.internal.utils.ClassUtils;
 import com.keimons.nutshell.core.internal.utils.ConsumerUtils;
-import com.keimons.nutshell.core.internal.utils.NClassUtils;
 
 import java.util.Map;
 import java.util.function.Consumer;
@@ -16,12 +16,12 @@ import java.util.function.Consumer;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
 public class InitBootstrap implements Bootstrap {
 
 	@Override
-	public void setup(ApplicationContext context, Assembly assembly) throws Throwable {
+	public void install(ApplicationContext context, Assembly assembly) throws Throwable {
 		context.getAssemblies().values().stream()
 				.flatMap(item -> item.findInjections(Autolink.class).stream())
 				.map(Class::getName).forEach(consumer(context, assembly))
@@ -29,8 +29,8 @@ public class InitBootstrap implements Bootstrap {
 	}
 
 	@Override
-	public void update(ApplicationContext context, Assembly assembly) throws Throwable {
-		setup(context, assembly);
+	public void hotswap(ApplicationContext context, Assembly assembly) throws Throwable {
+		install(context, assembly);
 	}
 
 	private Consumer<String> consumer(ApplicationContext context, Assembly assembly) throws Throwable {
@@ -41,7 +41,7 @@ public class InitBootstrap implements Bootstrap {
 				return;
 			}
 			// find inject type's implement in assembly.
-			Class<?> implement = NClassUtils.findImplement(classes.values(), injectType);
+			Class<?> implement = ClassUtils.findImplement(classes.values(), injectType);
 			if (implement == null) {
 				// ignore
 				return;

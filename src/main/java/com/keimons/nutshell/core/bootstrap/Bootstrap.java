@@ -14,7 +14,7 @@ import com.keimons.nutshell.core.assembly.Assembly;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
 public interface Bootstrap {
 
@@ -25,7 +25,7 @@ public interface Bootstrap {
 	 * @param assembly 本次安装的模块
 	 * @throws Throwable 引导安装异常，模块安装中，可能发生各种异常，所以，不能确定模块安装是否成功。
 	 */
-	void setup(ApplicationContext context, Assembly assembly) throws Throwable;
+	void install(ApplicationContext context, Assembly assembly) throws Throwable;
 
 	/**
 	 * 更新模块
@@ -34,5 +34,5 @@ public interface Bootstrap {
 	 * @param assembly 本次安装的模块
 	 * @throws Throwable 引导安装异常，模块安装中，可能发生各种异常，所以，不能确定模块安装是否成功。
 	 */
-	void update(ApplicationContext context, Assembly assembly) throws Throwable;
+	void hotswap(ApplicationContext context, Assembly assembly) throws Throwable;
 }

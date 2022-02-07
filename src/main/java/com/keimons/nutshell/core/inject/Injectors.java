@@ -31,7 +31,7 @@ import java.util.Objects;
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @see Autolink 自动链接
- * @since 9
+ * @since 11
  **/
 public class Injectors {
 

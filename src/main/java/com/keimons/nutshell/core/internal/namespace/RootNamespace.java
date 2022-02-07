@@ -1,7 +1,7 @@
 package com.keimons.nutshell.core.internal.namespace;
 
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.internal.utils.NClassUtils;
+import com.keimons.nutshell.core.internal.utils.ClassUtils;
 
 import java.util.Map;
 import java.util.Set;
@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
 public class RootNamespace extends DefaultNamespace {
 
@@ -29,7 +29,7 @@ public class RootNamespace extends DefaultNamespace {
 	}
 
 	private static Map<String, Class<?>> loadClass(ClassLoader classLoader, String packageName) {
-		Set<Class<?>> classes = NClassUtils.findClasses(classLoader, packageName, false);
+		Set<Class<?>> classes = ClassUtils.findClasses(classLoader, packageName, false);
 		return classes.stream().collect(Collectors.toMap(Class::getName, clazz -> clazz));
 	}
 }

@@ -9,7 +9,11 @@ import java.util.Set;
 
 /**
  * 启动器
- */
+ *
+ * @author houyn[monkey@keimons.com]
+ * @version 1.0
+ * @since 11
+ **/
 public class NutshellLauncher {
 
 	public static NutshellApplication run(Class<?> clazz, String... args) {

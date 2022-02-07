@@ -1,6 +1,6 @@
 package com.keimons.nutshell.core.internal.namespace;
 
-import com.keimons.nutshell.core.internal.utils.NClassUtils;
+import com.keimons.nutshell.core.internal.utils.ClassUtils;
 
 import java.util.Map;
 import java.util.Set;
@@ -17,7 +17,7 @@ public class PackageNamespace extends DefaultNamespace {
 	}
 
 	private static Map<String, Class<?>> loadClass(ClassLoader classLoader, String packageName) {
-		Set<Class<?>> classes = NClassUtils.findClasses(classLoader, packageName, true);
+		Set<Class<?>> classes = ClassUtils.findClasses(classLoader, packageName, true);
 		return classes.stream().collect(Collectors.toMap(Class::getName, cls -> cls));
 	}
 

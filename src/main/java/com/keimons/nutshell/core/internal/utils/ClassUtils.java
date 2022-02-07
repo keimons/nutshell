@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
  * @version 1.0
  * @since 11
  */
-public class NClassUtils {
+public class ClassUtils {
 
 	/**
 	 * 判断一个类是否是一个普通类
@@ -49,9 +49,9 @@ public class NClassUtils {
 			String info = "target class " + target.getSimpleName() + " not interface";
 			throw new IllegalStateException(info);
 		}
-		return NClassUtils.findClasses((ClassLoader) null, packageName, true).stream()
+		return ClassUtils.findClasses((ClassLoader) null, packageName, true).stream()
 				.filter(target::isAssignableFrom)
-				.filter(NClassUtils::isNormalClass)
+				.filter(ClassUtils::isNormalClass)
 				.map(clazz -> (Class<T>) clazz)
 				.collect(Collectors.toList());
 	}
@@ -149,9 +149,9 @@ public class NClassUtils {
 	@SuppressWarnings("unchecked")
 	public static <T> List<Class<T>> findClasses(
 			String packageName, Class<? extends Annotation> annotation) {
-		return NClassUtils.findClasses(null, packageName, true).stream()
+		return ClassUtils.findClasses(null, packageName, true).stream()
 				.filter(clazz -> clazz.isAnnotationPresent(annotation))
-				.filter(NClassUtils::isNormalClass)
+				.filter(ClassUtils::isNormalClass)
 				.map(clazz -> (Class<T>) clazz)
 				.collect(Collectors.toList());
 	}

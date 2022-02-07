@@ -6,12 +6,12 @@ import com.keimons.nutshell.core.assembly.Assembly;
 public class UpdateBootstrap implements Bootstrap {
 
 	@Override
-	public void setup(ApplicationContext context, Assembly assembly) throws Throwable {
+	public void install(ApplicationContext context, Assembly assembly) throws Throwable {
 
 	}
 
 	@Override
-	public void update(ApplicationContext context, Assembly assembly) throws Throwable {
+	public void hotswap(ApplicationContext context, Assembly assembly) throws Throwable {
 		assembly.reset();
 	}
 }

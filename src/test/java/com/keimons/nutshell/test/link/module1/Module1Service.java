@@ -4,11 +4,11 @@ import com.keimons.nutshell.core.Autolink;
 import com.keimons.nutshell.test.link.module2.Module2Sharable;
 
 /**
- * 玩家模块
+ * 模拟模块1
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
 public class Module1Service implements Module1Sharable {
 

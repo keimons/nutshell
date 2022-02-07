@@ -7,7 +7,7 @@ import com.keimons.nutshell.core.inject.Injectors;
 import com.keimons.nutshell.core.internal.namespace.DefaultNamespace;
 import com.keimons.nutshell.core.internal.namespace.Namespace;
 import com.keimons.nutshell.core.internal.namespace.PackageNamespace;
-import com.keimons.nutshell.core.internal.utils.NClassUtils;
+import com.keimons.nutshell.core.internal.utils.ClassUtils;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -47,7 +47,7 @@ import java.util.stream.Collectors;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 9
+ * @since 11
  **/
 public class Assembly {
 
@@ -75,7 +75,7 @@ public class Assembly {
 	 * 监听器
 	 */
 	private List<Listener> installs = new ArrayList<>();
-	private List<Listener> upgrades = new ArrayList<>();
+	private List<Listener> hotswaps = new ArrayList<>();
 
 	private int version;
 
@@ -92,7 +92,7 @@ public class Assembly {
 		if (type == Listener.ListenerType.INSTALL) {
 			installs.add(listener);
 		} else {
-			upgrades.add(listener);
+			hotswaps.add(listener);
 		}
 	}
 
@@ -101,7 +101,7 @@ public class Assembly {
 	}
 
 	public Set<Class<?>> findInjections(Class<? extends Annotation> annotation) {
-		return NClassUtils.findInjections(namespace.getClasses().values(), annotation);
+		return ClassUtils.findInjections(namespace.getClasses().values(), annotation);
 	}
 
 	public Object getInstance(String interfaceName) {
@@ -116,7 +116,7 @@ public class Assembly {
 	public void inject(ApplicationContext context) throws Throwable {
 		Map<String, Object> instances = namespace.getExports();
 		for (Object instance : instances.values()) {
-			if (NClassUtils.hasAnnotation(instance.getClass(), Autolink.class)) {
+			if (ClassUtils.hasAnnotation(instance.getClass(), Autolink.class)) {
 				Injectors injectors = Injectors.of(instance.getClass(), Autolink.class);
 				injectors.inject(context, this, instance);
 				System.out.println("inject instance: " + instance.getClass());
@@ -146,7 +146,7 @@ public class Assembly {
 	public static Assembly of(Object object) {
 		ClassLoader classLoader = object.getClass().getClassLoader();
 		String packageName = object.getClass().getPackageName();
-		Set<Class<?>> set = NClassUtils.findClasses(classLoader, packageName, false);
+		Set<Class<?>> set = ClassUtils.findClasses(classLoader, packageName, false);
 		Map<String, Class<?>> classes = set.stream().collect(Collectors.toMap(Class::getName, cls -> cls));
 		Namespace namespace = new DefaultNamespace(classLoader, classes);
 		namespace.getExports().put(ROOT, object);
@@ -166,7 +166,7 @@ public class Assembly {
 	}
 
 	public void linkUpgrades() throws Throwable {
-		for (Listener install : upgrades) {
+		for (Listener install : hotswaps) {
 			install.apply();
 		}
 	}
