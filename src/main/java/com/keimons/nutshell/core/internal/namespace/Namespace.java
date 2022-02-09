@@ -1,7 +1,7 @@
 package com.keimons.nutshell.core.internal.namespace;
 
-import com.keimons.nutshell.core.NutshellClassLoader;
 import com.keimons.nutshell.core.assembly.Assembly;
+import com.keimons.nutshell.core.internal.HotswapClassLoader;
 
 import java.util.Map;
 
@@ -22,7 +22,7 @@ import java.util.Map;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @see NutshellClassLoader 类装载器
+ * @see HotswapClassLoader 类装载器
  * @since 11
  **/
 public interface Namespace {

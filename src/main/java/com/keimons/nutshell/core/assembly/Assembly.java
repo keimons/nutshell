@@ -2,8 +2,8 @@ package com.keimons.nutshell.core.assembly;
 
 import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.NutshellClassLoader;
 import com.keimons.nutshell.core.inject.Injectors;
+import com.keimons.nutshell.core.internal.HotswapClassLoader;
 import com.keimons.nutshell.core.internal.namespace.DefaultNamespace;
 import com.keimons.nutshell.core.internal.namespace.Namespace;
 import com.keimons.nutshell.core.internal.namespace.PackageNamespace;
@@ -129,8 +129,8 @@ public class Assembly {
 			installs.clear();
 			PackageNamespace namespace = (PackageNamespace) this.namespace;
 			ClassLoader classLoader = this.namespace.getClassLoader();
-			ClassLoader parent = classLoader instanceof NutshellClassLoader ? ((NutshellClassLoader) classLoader).getParentClassLoader() : classLoader.getParent();
-			this.namespace = new PackageNamespace(new NutshellClassLoader(name, parent, namespace.getRoot()), namespace.getRoot(), namespace.getSubpackage());
+			ClassLoader parent = classLoader instanceof HotswapClassLoader ? ((HotswapClassLoader) classLoader).getParentClassLoader() : classLoader.getParent();
+			this.namespace = new PackageNamespace(new HotswapClassLoader(name, parent, namespace.getRoot()), namespace.getRoot(), namespace.getSubpackage());
 		}
 	}
 
@@ -162,7 +162,7 @@ public class Assembly {
 	 * @return {@link Assembly}
 	 */
 	public static Assembly of(ClassLoader parent, String root, String subpackage) {
-		NutshellClassLoader classLoader = new NutshellClassLoader(subpackage, parent, root);
+		HotswapClassLoader classLoader = new HotswapClassLoader(subpackage, parent, root);
 		Namespace namespace = new PackageNamespace(classLoader, root, subpackage);
 		return new Assembly(subpackage, namespace);
 	}

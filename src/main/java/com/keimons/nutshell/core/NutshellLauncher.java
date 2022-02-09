@@ -2,7 +2,7 @@ package com.keimons.nutshell.core;
 
 import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.internal.utils.PackageUtils;
-import com.keimons.nutshell.core.monitor.ApplicationObserver;
+import com.keimons.nutshell.core.monitor.HotswapObserver;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +23,7 @@ public class NutshellLauncher {
 		return null;
 	}
 
-	public static NutshellApplication run(Object object, ApplicationObserver<?> observer, String... args) throws Throwable {
+	public static NutshellApplication run(Object object, HotswapObserver<?> observer, String... args) throws Throwable {
 		NutshellApplication application = new NutshellApplication(object, observer);
 		application.install(defaultAssemblies(object));
 		LOCAL.set(application);

@@ -3,8 +3,8 @@ package com.keimons.nutshell.core;
 import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.bootstrap.*;
 import com.keimons.nutshell.core.internal.utils.RuntimeUtils;
-import com.keimons.nutshell.core.monitor.ApplicationMonitor;
-import com.keimons.nutshell.core.monitor.ApplicationObserver;
+import com.keimons.nutshell.core.monitor.HotswapMonitor;
+import com.keimons.nutshell.core.monitor.HotswapObserver;
 
 import java.util.List;
 
@@ -21,18 +21,18 @@ public class NutshellApplication {
 
 	private ApplicationContext context;
 
-	private ApplicationObserver<?> observer;
+	private HotswapObserver<?> observer;
 
-	private ApplicationMonitor monitor;
+	private HotswapMonitor monitor;
 
 	private Object root;
 
-	public NutshellApplication(Object root, ApplicationObserver<?> observer) {
+	public NutshellApplication(Object root, HotswapObserver<?> observer) {
 		RuntimeUtils.init(root.getClass());
 
 		installer = new AssemblyInstaller();
 		context = new DefaultApplicationContext();
-		monitor = new ApplicationMonitor(this, observer, root);
+		monitor = new HotswapMonitor(this, observer, root);
 
 		installer.addLast("update", new UpdateBootstrap());
 		installer.addLast("init", new InitBootstrap());

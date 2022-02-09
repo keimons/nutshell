@@ -4,7 +4,7 @@ import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
 import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.internal.utils.ClassUtils;
-import com.keimons.nutshell.core.internal.utils.ConsumerUtils;
+import com.keimons.nutshell.core.internal.utils.ThrowableUtils;
 
 import java.util.Map;
 import java.util.function.Consumer;
@@ -34,7 +34,7 @@ public class InitBootstrap implements Bootstrap {
 	}
 
 	private Consumer<String> consumer(ApplicationContext context, Assembly assembly) throws Throwable {
-		return ConsumerUtils.wrapper(injectName -> {
+		return ThrowableUtils.wrapper(injectName -> {
 			Map<String, Class<?>> classes = assembly.getClasses();
 			Class<?> injectType = classes.get(injectName);
 			if (injectType == null) {

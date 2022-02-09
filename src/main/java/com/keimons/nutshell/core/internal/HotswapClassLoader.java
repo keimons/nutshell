@@ -1,5 +1,7 @@
-package com.keimons.nutshell.core;
+package com.keimons.nutshell.core.internal;
 
+import com.keimons.nutshell.core.NutshellApplication;
+import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.internal.utils.CleanerUtils;
 
 import java.io.InputStream;
@@ -8,16 +10,34 @@ import java.net.URLClassLoader;
 import java.util.Set;
 
 /**
- * ClassLoader
+ * 热插拔类装载
+ * <p>
+ * 每个类装载器都有装载范围，对于超出装载范围的类，使用父类装载器装载。
+ * nutshell的热插拔依赖于类装载的装载范围。
+ * nutshell定义启动类{@link NutshellApplication}所在类为根目录，
+ * 根目录下，每个子目录为一个{@link Assembly}并拥有单独的类装载。
+ * 热插拔类装载器无法装载根目录类，只能用于装载子目录类。
+ * <p>
+ * 如果类中有依赖类，那么根据依赖类位置，如果依赖类位于根目录下，
+ * 则使用{@link HotswapClassLoader}装载，如果依赖类不在根目录下，
+ * 则使用父类装载器装载。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @since 11
  **/
-public class NutshellClassLoader extends URLClassLoader {
+public class HotswapClassLoader extends URLClassLoader {
 
+	/**
+	 * 装载策略
+	 * <p>
+	 * 每个类装载器都有装载策略，装载策略决定了哪些类可以使用这个类装载器装载。
+	 */
 	private final LoadStrategy strategy;
 
+	/**
+	 * 父类装载器
+	 */
 	private final ClassLoader parent;
 
 	/**
@@ -25,7 +45,7 @@ public class NutshellClassLoader extends URLClassLoader {
 	 *
 	 * @param name 类装载器的名字
 	 */
-	public NutshellClassLoader(String name, ClassLoader parent, String... classNames) {
+	public HotswapClassLoader(String name, ClassLoader parent, String... classNames) {
 		super(name, new URL[]{}, null);
 		this.parent = parent;
 		this.strategy = new ClassNamesPolicy(Set.of(classNames));
@@ -38,7 +58,7 @@ public class NutshellClassLoader extends URLClassLoader {
 	 * @param name   类装载器的名字
 	 * @param pkg    类装载器的装载范围
 	 */
-	public NutshellClassLoader(String name, ClassLoader parent, String pkg) {
+	public HotswapClassLoader(String name, ClassLoader parent, String pkg) {
 		super(name, new URL[]{}, null);
 		this.parent = parent;
 		this.strategy = new PackagePolicy(pkg);
@@ -69,12 +89,26 @@ public class NutshellClassLoader extends URLClassLoader {
 		}
 	}
 
+	/**
+	 * 获取父类装载
+	 *
+	 * @return 父类装载
+	 */
 	public ClassLoader getParentClassLoader() {
 		return parent;
 	}
 
+	/**
+	 * 装载策略
+	 */
 	private interface LoadStrategy {
 
+		/**
+		 * 测试类能否使用这个类装载器装载
+		 *
+		 * @param className 类名
+		 * @return true.可以使用 false.不能使用
+		 */
 		boolean test(String className);
 	}
 

@@ -1,7 +1,7 @@
 package com.keimons.nutshell.test;
 
 import com.keimons.nutshell.core.NutshellLauncher;
-import com.keimons.nutshell.core.monitor.ApplicationObserver;
+import com.keimons.nutshell.core.monitor.HotswapObserver;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -33,7 +33,7 @@ public class Launcher implements ExecutionCondition {
 		return ConditionEvaluationResult.enabled("test");
 	}
 
-	static class TestObserver implements ApplicationObserver<String> {
+	static class TestObserver implements HotswapObserver<String> {
 
 		String path = System.getProperty("user.dir") + File.separator + "src" + File.separator + "test" + File.separator + "resources" + File.separator + "version.properties";
 

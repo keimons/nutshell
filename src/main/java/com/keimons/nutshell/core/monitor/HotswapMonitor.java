@@ -5,32 +5,32 @@ import com.keimons.nutshell.core.NutshellApplication;
 import java.io.File;
 
 /**
- * ApplicationMonitor
+ * 热插拔监视器
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @since 11
  */
-public class ApplicationMonitor implements Runnable {
+public class HotswapMonitor implements Runnable {
 
 	Object last;
 
 	private final NutshellApplication application;
 
-	private final ApplicationObserver<Object> observer;
+	private final HotswapObserver<Object> observer;
 
 	private String dir;
 
 	private String pkg;
 
 	@SuppressWarnings("unchecked")
-	public ApplicationMonitor(NutshellApplication application, ApplicationObserver<?> observer, Object root) {
+	public HotswapMonitor(NutshellApplication application, HotswapObserver<?> observer, Object root) {
 		this.application = application;
-		this.observer = (ApplicationObserver<Object>) observer;
-		String path = root.getClass().getResource("/").getPath();
-		String packagePath = root.getClass().getPackageName().replaceAll("\\.", File.separator);
-		this.dir = path + packagePath + File.separator;
+		this.observer = (HotswapObserver<Object>) observer;
 		this.pkg = root.getClass().getPackageName();
+		String path = root.getClass().getResource("/").getPath();
+		String packagePath = this.pkg.replaceAll("\\.", File.separator);
+		this.dir = path + packagePath + File.separator;
 	}
 
 	public void monitor() {
