@@ -7,7 +7,7 @@ public class UpdateBootstrap implements Bootstrap {
 
 	@Override
 	public void install(ApplicationContext context, Assembly assembly) throws Throwable {
-
+		// do nothing
 	}
 
 	@Override

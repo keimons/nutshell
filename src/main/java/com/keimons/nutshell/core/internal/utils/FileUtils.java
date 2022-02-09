@@ -1,7 +1,6 @@
 package com.keimons.nutshell.core.internal.utils;
 
-import java.io.File;
-import java.io.RandomAccessFile;
+import java.io.*;
 
 /**
  * FileUtils
@@ -40,5 +39,16 @@ public class FileUtils {
 			}
 		}
 		return null;
+	}
+
+	public static byte[] readClass(String className) throws IOException {
+		String fileName = "/" + className.replaceAll("\\.", "/") + ".class";
+		InputStream is = FileUtils.class.getResourceAsStream(fileName);
+		if (is == null) {
+			throw new FileNotFoundException("file: " + className);
+		}
+		byte[] bytes = new byte[is.available()];
+		is.read(bytes);
+		return bytes;
 	}
 }

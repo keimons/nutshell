@@ -46,7 +46,7 @@ public class Launcher implements ExecutionCondition {
 				properties.load(bufferedReader);
 				Optional<Integer> max = properties.keySet().stream().map(key -> Integer.parseInt(key.toString())).max(Integer::compareTo);
 				if (max.isPresent()) {
-					return max.toString();
+					return max.get().toString();
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -56,15 +56,16 @@ public class Launcher implements ExecutionCondition {
 
 		@Override
 		public File getHotswapFile(String message) {
-			Properties properties = new Properties();
-			// 使用InPutStream流读取properties文件
-			try {
-				BufferedReader bufferedReader = new BufferedReader(new FileReader(path));
-				properties.load(bufferedReader);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-			return new File(properties.getProperty(message));
+			return new File(this.getClass().getResource("/").getPath());
+//			Properties properties = new Properties();
+//			// 使用InPutStream流读取properties文件
+//			try {
+//				BufferedReader bufferedReader = new BufferedReader(new FileReader(path));
+//				properties.load(bufferedReader);
+//			} catch (Exception e) {
+//				e.printStackTrace();
+//			}
+//			return new File(properties.getProperty(message));
 		}
 	}
 }

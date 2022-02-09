@@ -12,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-import java.util.stream.Collectors;
 
 /**
  * 读取某一个jar包或者某一个文件夹下的所有class文件
@@ -22,39 +21,6 @@ import java.util.stream.Collectors;
  * @since 11
  */
 public class ClassUtils {
-
-	/**
-	 * 判断一个类是否是一个普通类
-	 *
-	 * @param clazz 类
-	 * @return 是否普通类
-	 */
-	private static boolean isNormalClass(Class<?> clazz) {
-		int modifiers = Modifier.ABSTRACT | Modifier.INTERFACE;
-		return (clazz.getModifiers() & modifiers) == 0;
-	}
-
-	/**
-	 * 加载所有使用该注解的类
-	 *
-	 * @param packageName 包名
-	 * @param target      注解
-	 * @param <T>         泛型类型
-	 * @return 使用该注解的类
-	 */
-	@SuppressWarnings("unchecked")
-	public static <T> List<Class<T>> findClassesWithInterface(
-			String packageName, Class<?> target, Class<? extends Annotation> ext) {
-		if (!Modifier.isInterface(target.getModifiers())) {
-			String info = "target class " + target.getSimpleName() + " not interface";
-			throw new IllegalStateException(info);
-		}
-		return ClassUtils.findClasses((ClassLoader) null, packageName, true).stream()
-				.filter(target::isAssignableFrom)
-				.filter(ClassUtils::isNormalClass)
-				.map(clazz -> (Class<T>) clazz)
-				.collect(Collectors.toList());
-	}
 
 	/**
 	 * Find the implement class of the interface in {@code classes}, ignore the class loader.
@@ -100,32 +66,6 @@ public class ClassUtils {
 		return injections;
 	}
 
-	/**
-	 * 查找所有注入点
-	 * <p>
-	 * 在指定的范围内，查找所有标注了该注解的异常。
-	 *
-	 * @param classes    查找范围
-	 * @param annotation 注入点标识
-	 * @return 范围内所有的注入点
-	 */
-	public static Set<Class<?>> findAnnotated(Collection<Class<?>> classes, Class<? extends Annotation> annotation) {
-		Set<Class<?>> annotated = new HashSet<Class<?>>();
-		for (Class<?> clazz : classes) {
-			if (clazz.getAnnotation(annotation) != null) {
-				annotated.add(clazz);
-				continue;
-			}
-			for (Field field : clazz.getDeclaredFields()) {
-				if (field.getAnnotation(annotation) != null) {
-					annotated.add(clazz);
-					break;
-				}
-			}
-		}
-		return annotated;
-	}
-
 	public static boolean hasAnnotation(Class<?> clazz, Class<? extends Annotation> annotation) {
 		if (clazz.getAnnotation(annotation) != null) {
 			return true;
@@ -139,35 +79,15 @@ public class ClassUtils {
 	}
 
 	/**
-	 * 加载所有使用该注解的类
-	 *
-	 * @param packageName 包名
-	 * @param annotation  注解
-	 * @param <T>         泛型类型
-	 * @return 使用该注解的类
-	 */
-	@SuppressWarnings("unchecked")
-	public static <T> List<Class<T>> findClasses(
-			String packageName, Class<? extends Annotation> annotation) {
-		return ClassUtils.findClasses(null, packageName, true).stream()
-				.filter(clazz -> clazz.isAnnotationPresent(annotation))
-				.filter(ClassUtils::isNormalClass)
-				.map(clazz -> (Class<T>) clazz)
-				.collect(Collectors.toList());
-	}
-
-	/**
 	 * 从包package中获取所有的Class
 	 *
-	 * @param loader       使用的类装载器
 	 * @param pack         包名
 	 * @param subdirectory 是否包含子目录
 	 * @return 该包下所有的class文件
 	 */
-	public static Set<Class<?>> findClasses(ClassLoader loader, final String pack, boolean subdirectory) {
-		loader = loader == null ? Thread.currentThread().getContextClassLoader() : loader;
+	public static Set<String> findClasses(final String pack, boolean subdirectory) {
 		// 第一个class类的集合
-		Set<Class<?>> classes = new LinkedHashSet<>();
+		Set<String> classes = new LinkedHashSet<>();
 		// 获取包的名字 并进行替换
 		String packageName = pack;
 		String packageDirName = packageName.replace('.', '/');
@@ -186,7 +106,7 @@ public class ClassUtils {
 					// 获取包的物理路径
 					String filePath = URLDecoder.decode(url.getFile(), StandardCharsets.UTF_8);
 					// 以文件的方式扫描整个包下的文件 并添加到集合中
-					findAndAddClassesInPackageByFile(loader, pack, filePath, classes, subdirectory, pack);
+					findAndAddClassesInPackageByFile(pack, filePath, classes, subdirectory, pack);
 				} else if ("jar".equals(protocol)) {
 					// 如果是jar包文件
 					// 定义一个JarFile
@@ -219,12 +139,8 @@ public class ClassUtils {
 								if (name.endsWith(".class") && !entry.isDirectory() && (subdirectory || packageName.equals(pack))) {
 									// 去掉后面的".class" 获取真正的类名
 									String className = name.substring(packageName.length() + 1, name.length() - 6);
-									try {
-										// 添加到classes
-										classes.add(loader.loadClass(packageName + '.' + className));
-									} catch (ClassNotFoundException e) {
-										e.printStackTrace();
-									}
+									// 添加到classes
+									classes.add(className);
 								}
 							}
 						}
@@ -250,10 +166,9 @@ public class ClassUtils {
 	 * @param pack
 	 */
 	private static void findAndAddClassesInPackageByFile(
-			ClassLoader loader,
 			String packageName,
 			String packagePath,
-			Set<Class<?>> classes,
+			Set<String> classes,
 			boolean subdirectory,
 			final String pack) {
 		// 获取此包的目录 建立一个File
@@ -270,22 +185,15 @@ public class ClassUtils {
 			// 如果是目录 则继续扫描
 			if (file.isDirectory()) {
 				if (packageName.equals("")) {
-					findAndAddClassesInPackageByFile(loader, file.getName(), file.getAbsolutePath(), classes, subdirectory, pack);
+					findAndAddClassesInPackageByFile(file.getName(), file.getAbsolutePath(), classes, subdirectory, pack);
 				} else {
-					findAndAddClassesInPackageByFile(loader, packageName + "." + file.getName(), file.getAbsolutePath(), classes, subdirectory, pack);
+					findAndAddClassesInPackageByFile(packageName + "." + file.getName(), file.getAbsolutePath(), classes, subdirectory, pack);
 				}
 			} else {
 				if (subdirectory || pack.equals(packageName)) {
-					// 如果是java类文件 去掉后面的.class 只留下类名
+					// 如果是java类文件 去掉后面的.class 只留下类名并添加到集合中
 					String className = file.getName().substring(0, file.getName().length() - 6);
-					try {
-						// 添加到集合中去
-						// classes.add(Class.forName(packageName + '.' + className));
-						// 这里用forName有一些不好，会触发static方法，没有使用classLoader的load干净
-						classes.add(loader.loadClass(packageName + '.' + className));
-					} catch (ClassNotFoundException e) {
-						e.printStackTrace();
-					}
+					classes.add(packageName + '.' + className);
 				}
 			}
 		}

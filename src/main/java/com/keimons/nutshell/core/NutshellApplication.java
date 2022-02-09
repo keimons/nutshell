@@ -6,6 +6,7 @@ import com.keimons.nutshell.core.internal.utils.RuntimeUtils;
 import com.keimons.nutshell.core.monitor.HotswapMonitor;
 import com.keimons.nutshell.core.monitor.HotswapObserver;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -32,14 +33,14 @@ public class NutshellApplication {
 
 		installer = new AssemblyInstaller();
 		context = new DefaultApplicationContext();
-		monitor = new HotswapMonitor(this, observer, root);
+		monitor = new HotswapMonitor(this, observer, root, 1000);
 
 		installer.addLast("update", new UpdateBootstrap());
 		installer.addLast("init", new InitBootstrap());
 		installer.addLast("inject", new InjectBootstrap());
 		installer.addLast("autolink", new AutolinkBootstrap());
 
-		monitor.monitor();
+		monitor.start();
 	}
 
 	public NutshellApplication(AssemblyInstaller installer, ApplicationContext context) {
@@ -51,9 +52,12 @@ public class NutshellApplication {
 		installer.install(context, assemblies);
 	}
 
-	public void hotswap(String packageName) throws Throwable {
-		Assembly assembly = context.get(packageName);
-		installer.hotswap(context, assembly);
+	public void hotswap(String... packages) throws Throwable {
+		List<Assembly> assemblies = new ArrayList<>(packages.length);
+		for (String pkg : packages) {
+			assemblies.add(context.get(pkg));
+		}
+		installer.hotswap(context, assemblies);
 	}
 
 	public void hotswap(List<Assembly> assemblies) throws Throwable {
