@@ -1,8 +1,11 @@
 package com.keimons.nutshell.core.monitor;
 
 import com.keimons.nutshell.core.NutshellApplication;
+import com.keimons.nutshell.core.internal.utils.PackageUtils;
 
 import java.io.File;
+import java.util.Set;
+import java.util.regex.Matcher;
 
 /**
  * 热插拔监视器
@@ -13,54 +16,80 @@ import java.io.File;
  */
 public class HotswapMonitor implements Runnable {
 
-	Object last;
-
 	private final NutshellApplication application;
 
 	private final HotswapObserver<Object> observer;
 
+	private final String rootPackage;
+
+	private final String rootPath;
+
+	private volatile boolean running;
+
+	private Thread thread;
+
+	private Object last = "1";
+
 	private String dir;
 
-	private String pkg;
+	private int interval;
 
 	@SuppressWarnings("unchecked")
-	public HotswapMonitor(NutshellApplication application, HotswapObserver<?> observer, Object root) {
+	public HotswapMonitor(NutshellApplication application, HotswapObserver<?> observer, Object root, int interval) {
 		this.application = application;
 		this.observer = (HotswapObserver<Object>) observer;
-		this.pkg = root.getClass().getPackageName();
+		this.rootPackage = root.getClass().getPackageName();
+		this.rootPath = this.rootPackage.replaceAll("\\.", Matcher.quoteReplacement(File.separator));
 		String path = root.getClass().getResource("/").getPath();
-		String packagePath = this.pkg.replaceAll("\\.", File.separator);
-		this.dir = path + packagePath + File.separator;
+		this.dir = path + this.rootPath + File.separator;
+		this.interval = interval;
 	}
 
-	public void monitor() {
-		Thread thread = new Thread(this);
-		thread.start();
+	public void start() {
+		if (!running) {
+			this.running = true;
+			thread = new Thread(this, "Hotswap Monitor");
+			thread.setDaemon(true);
+			thread.start();
+		}
+	}
+
+	public void stop() {
+		if (this.running) {
+			this.running = false;
+			try {
+				this.thread.interrupt();
+				this.thread.join(interval);
+			} catch (InterruptedException var5) {
+				Thread.currentThread().interrupt();
+			}
+		}
 	}
 
 	@Override
 	public void run() {
-		Object messageInfo = observer.getMessageInfo();
-		if (!last.equals(messageInfo)) {
-			File file = observer.getHotswapFile(messageInfo);
-			if (file.isDirectory()) {
-				String absolutePath = file.getAbsolutePath();
-				String substring = absolutePath.substring(dir.length(), absolutePath.indexOf(File.separator, dir.length()));
-				String subpackage = pkg + "." + substring;
-				try {
-					application.hotswap(subpackage);
-					System.gc();
-				} catch (Throwable e) {
-					e.printStackTrace();
+		while (running) {
+			Object messageInfo = observer.getMessageInfo();
+			if (!last.equals(messageInfo)) {
+				File file = observer.getHotswapFile(messageInfo);
+				if (file.isDirectory()) {
+					Set<String> subpackages = PackageUtils.findSubpackages(rootPackage);
+					try {
+						application.hotswap(subpackages.toArray(new String[0]));
+						System.gc();
+					} catch (Throwable e) {
+						e.printStackTrace();
+					}
+					last = messageInfo;
+				} else {
+					// TODO jar file
 				}
-			} else {
-				// TODO jar file
 			}
-		}
-		try {
-			Thread.sleep(1000);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+			try {
+				Thread.sleep(interval);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 }

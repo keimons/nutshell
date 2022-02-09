@@ -16,7 +16,7 @@ public class ClassUtilsTest {
 
 	@Test
 	public void test() {
-		Set<Class<?>> classes = ClassUtils.findClasses(null, "com.keimons.nutshell.test.link", false);
+		Set<String> classes = ClassUtils.findClasses("com.keimons.nutshell.test.link", false);
 		System.out.println(classes);
 	}
 }

@@ -11,11 +11,11 @@ public class Module2Service implements Module2Sharable {
 
 	@Override
 	public String name() {
-//		return test();
-		return "module2";
+		return test();
+//		return "module2";
 	}
 
-//	public String test() {
-//		return "test module2";
-//	}
+	public String test() {
+		return "test module2";
+	}
 }

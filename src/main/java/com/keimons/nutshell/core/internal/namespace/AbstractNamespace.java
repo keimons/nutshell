@@ -2,7 +2,7 @@ package com.keimons.nutshell.core.internal.namespace;
 
 import com.keimons.nutshell.core.assembly.Assembly;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link Namespace}是内部api不对外公开命名空间中记录{@link Assembly}的：
  * <ul>
  *     <li>classes</li>
+ *     <li>class bytes</li>
  *     <li>class loader</li>
  *     <li>export classes</li>
  *     <li>import classes</li>
@@ -22,17 +23,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * @version 1.0
  * @since 11
  **/
-public class DefaultNamespace implements Namespace {
+public abstract class AbstractNamespace implements Namespace {
 
 	protected final ClassLoader classLoader;
 
-	protected final Map<String, Class<?>> classes;
+	protected final Map<String, byte[]> classBytes = new HashMap<String, byte[]>();
+
+	protected final Map<String, Class<?>> classes = new HashMap<String, Class<?>>();
 
 	protected final Map<String, Object> exports = new ConcurrentHashMap<String, Object>();
 
-	public DefaultNamespace(ClassLoader classLoader, Map<String, Class<?>> classes) {
+	protected AbstractNamespace(ClassLoader classLoader) {
 		this.classLoader = classLoader;
-		this.classes = Collections.unmodifiableMap(classes);
 	}
 
 	@Override
@@ -48,5 +50,10 @@ public class DefaultNamespace implements Namespace {
 	@Override
 	public Map<String, Object> getExports() {
 		return exports;
+	}
+
+	@Override
+	public Map<String, byte[]> getClassBytes() {
+		return classBytes;
 	}
 }

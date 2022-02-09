@@ -4,17 +4,16 @@ import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
 import com.keimons.nutshell.core.inject.Injectors;
 import com.keimons.nutshell.core.internal.HotswapClassLoader;
-import com.keimons.nutshell.core.internal.namespace.DefaultNamespace;
 import com.keimons.nutshell.core.internal.namespace.Namespace;
 import com.keimons.nutshell.core.internal.namespace.PackageNamespace;
+import com.keimons.nutshell.core.internal.namespace.RootNamespace;
 import com.keimons.nutshell.core.internal.utils.ClassUtils;
+import com.keimons.nutshell.core.internal.utils.EqualsUtils;
+import com.keimons.nutshell.core.internal.utils.FileUtils;
 
+import java.io.IOException;
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.*;
 
 /**
  * 程序集
@@ -124,13 +123,39 @@ public class Assembly {
 		}
 	}
 
-	public void reset() {
+	public void reset() throws IOException {
 		if (this.namespace instanceof PackageNamespace) {
 			installs.clear();
 			PackageNamespace namespace = (PackageNamespace) this.namespace;
-			ClassLoader classLoader = this.namespace.getClassLoader();
-			ClassLoader parent = classLoader instanceof HotswapClassLoader ? ((HotswapClassLoader) classLoader).getParentClassLoader() : classLoader.getParent();
-			this.namespace = new PackageNamespace(new HotswapClassLoader(name, parent, namespace.getRoot()), namespace.getRoot(), namespace.getSubpackage());
+			Set<String> classNames = ClassUtils.findClasses(namespace.getSubpackage(), true);
+			Map<String, byte[]> oldCache = namespace.getClassBytes();
+			Map<String, byte[]> newCache = new HashMap<String, byte[]>(classNames.size());
+			if (oldCache.size() == classNames.size()) {
+				for (String className : classNames) {
+					newCache.put(className, FileUtils.readClass(className));
+				}
+			}
+			if (!EqualsUtils.isEquals(oldCache, newCache)) {
+				System.out.println("reset: " + name);
+				ClassLoader classLoader = this.namespace.getClassLoader();
+				ClassLoader parent;
+				if (classLoader instanceof HotswapClassLoader) {
+					parent = ((HotswapClassLoader) classLoader).getParentClassLoader();
+				} else {
+					parent = classLoader.getParent();
+				}
+				HotswapClassLoader newLoader = new HotswapClassLoader(name, parent, namespace.getRoot());
+				this.namespace = new PackageNamespace(newLoader, namespace.getRoot(), namespace.getSubpackage());
+				for (Map.Entry<String, byte[]> entry : newCache.entrySet()) {
+					String className = entry.getKey();
+					byte[] bytes = entry.getValue();
+					Class<?> clazz = newLoader.loadClass(entry.getKey(), bytes);
+					this.namespace.getClassBytes().put(className, bytes);
+					this.namespace.getClasses().put(className, clazz);
+				}
+			} else {
+				System.out.println("not reset: " + name);
+			}
 		}
 	}
 
@@ -143,13 +168,8 @@ public class Assembly {
 		return name;
 	}
 
-	public static Assembly of(Object object) {
-		ClassLoader classLoader = object.getClass().getClassLoader();
-		String packageName = object.getClass().getPackageName();
-		Set<Class<?>> set = ClassUtils.findClasses(classLoader, packageName, false);
-		Map<String, Class<?>> classes = set.stream().collect(Collectors.toMap(Class::getName, cls -> cls));
-		Namespace namespace = new DefaultNamespace(classLoader, classes);
-		namespace.getExports().put(ROOT, object);
+	public static Assembly of(Object root) throws ClassNotFoundException {
+		Namespace namespace = new RootNamespace(root);
 		return new Assembly(ROOT, namespace);
 	}
 
@@ -161,9 +181,16 @@ public class Assembly {
 	 * @param subpackage {@link Assembly}目录
 	 * @return {@link Assembly}
 	 */
-	public static Assembly of(ClassLoader parent, String root, String subpackage) {
+	public static Assembly of(ClassLoader parent, String root, String subpackage) throws IOException {
 		HotswapClassLoader classLoader = new HotswapClassLoader(subpackage, parent, root);
 		Namespace namespace = new PackageNamespace(classLoader, root, subpackage);
+		Set<String> classNames = ClassUtils.findClasses(subpackage, true);
+		for (String className : classNames) {
+			byte[] bytes = FileUtils.readClass(className);
+			Class<?> clazz = classLoader.loadClass(className, bytes);
+			namespace.getClassBytes().put(className, bytes);
+			namespace.getClasses().put(className, clazz);
+		}
 		return new Assembly(subpackage, namespace);
 	}
 

@@ -3,8 +3,8 @@ package com.keimons.nutshell.core.internal;
 import com.keimons.nutshell.core.NutshellApplication;
 import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.internal.utils.CleanerUtils;
+import com.keimons.nutshell.core.internal.utils.FileUtils;
 
-import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Set;
@@ -64,23 +64,28 @@ public class HotswapClassLoader extends URLClassLoader {
 		this.strategy = new PackagePolicy(pkg);
 	}
 
+	/**
+	 * 装载类
+	 *
+	 * @param className 类名
+	 * @param bytes     类文件
+	 * @return 装载的类
+	 */
+	public Class<?> loadClass(String className, byte[] bytes) {
+		Class<?> clazz = findLoadedClass(className);
+		if (clazz == null) {
+			clazz = defineClass(className, bytes, 0, bytes.length);
+			CleanerUtils.register(clazz);
+		}
+		return clazz;
+	}
+
 	@Override
 	protected Class<?> findClass(String className) throws ClassNotFoundException {
 		if (strategy.test(className)) {
 			try {
-				String fileName = "/" + className.replaceAll("\\.", "/") + ".class";
-				InputStream is = getClass().getResourceAsStream(fileName);
-				if (is == null) {
-					throw new ClassNotFoundException(className);
-				}
-				byte[] b = new byte[is.available()];
-				int read = is.read(b);
-				if (b.length != read) {
-					throw new ClassNotFoundException(className);
-				}
-				Class<?> clazz = defineClass(className, b, 0, b.length);
-				CleanerUtils.register(clazz);
-				return clazz;
+				byte[] bytes = FileUtils.readClass(className);
+				return loadClass(className, bytes);
 			} catch (Exception e) {
 				throw new ClassNotFoundException(className, e);
 			}

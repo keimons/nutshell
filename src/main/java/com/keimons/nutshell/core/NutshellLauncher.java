@@ -34,7 +34,7 @@ public class NutshellLauncher {
 		return LOCAL.get();
 	}
 
-	private static List<Assembly> defaultAssemblies(Object object) {
+	private static List<Assembly> defaultAssemblies(Object object) throws Exception {
 		List<Assembly> assemblies = new ArrayList<Assembly>();
 		assemblies.add(Assembly.of(object));
 		String packageName = object.getClass().getPackageName();

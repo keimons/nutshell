@@ -1,11 +1,10 @@
 package com.keimons.nutshell.core.internal.namespace;
 
 import com.keimons.nutshell.core.Autolink;
+import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.internal.utils.ClassUtils;
 
-import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * 根命名空间
@@ -18,18 +17,21 @@ import java.util.stream.Collectors;
  * @version 1.0
  * @since 11
  **/
-public class RootNamespace extends DefaultNamespace {
+public class RootNamespace extends AbstractNamespace {
 
-	Object root;
+	protected final Object root;
 
-	public RootNamespace(Object root) {
-		super(root.getClass().getClassLoader(), loadClass(root.getClass().getClassLoader(), root.getClass().getPackageName()));
+	public RootNamespace(Object root) throws ClassNotFoundException {
+		super(root.getClass().getClassLoader());
 		this.root = root;
-		this.exports.put("ROOT", root);
-	}
+		this.exports.put(Assembly.ROOT, root);
 
-	private static Map<String, Class<?>> loadClass(ClassLoader classLoader, String packageName) {
-		Set<Class<?>> classes = ClassUtils.findClasses(classLoader, packageName, false);
-		return classes.stream().collect(Collectors.toMap(Class::getName, clazz -> clazz));
+		String packageName = root.getClass().getPackageName();
+		Set<String> classNames = ClassUtils.findClasses(packageName, false);
+		ClassLoader classLoader = root.getClass().getClassLoader();
+		for (String className : classNames) {
+			Class<?> clazz = classLoader.loadClass(className);
+			this.classes.put(className, clazz);
+		}
 	}
 }

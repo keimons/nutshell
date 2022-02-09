@@ -57,4 +57,13 @@ public interface Namespace {
 	 * @return 导出实例
 	 */
 	Map<String, Object> getExports();
+
+	/**
+	 * 缓存字节码
+	 * <p>
+	 * 该包下类的字节码，用于判断这个类是否发生变化。
+	 *
+	 * @return 类的字节码
+	 */
+	Map<String, byte[]> getClassBytes();
 }
