@@ -36,11 +36,12 @@ public class NutshellClassLoader extends URLClassLoader {
 	 *
 	 * @param parent 父类加载
 	 * @param name   类装载器的名字
+	 * @param pkg    类装载器的装载范围
 	 */
-	public NutshellClassLoader(String name, ClassLoader parent, String packageName) {
+	public NutshellClassLoader(String name, ClassLoader parent, String pkg) {
 		super(name, new URL[]{}, null);
 		this.parent = parent;
-		this.strategy = new PackagePolicy(packageName);
+		this.strategy = new PackagePolicy(pkg);
 	}
 
 	@Override

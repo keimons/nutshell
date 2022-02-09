@@ -130,7 +130,7 @@ public class Assembly {
 			PackageNamespace namespace = (PackageNamespace) this.namespace;
 			ClassLoader classLoader = this.namespace.getClassLoader();
 			ClassLoader parent = classLoader instanceof NutshellClassLoader ? ((NutshellClassLoader) classLoader).getParentClassLoader() : classLoader.getParent();
-			this.namespace = new PackageNamespace(new NutshellClassLoader(name, parent, namespace.getPackageName()), namespace.getPackageName());
+			this.namespace = new PackageNamespace(new NutshellClassLoader(name, parent, namespace.getRoot()), namespace.getRoot(), namespace.getSubpackage());
 		}
 	}
 
@@ -153,10 +153,18 @@ public class Assembly {
 		return new Assembly(ROOT, namespace);
 	}
 
-	public static Assembly of(ClassLoader parent, String packageName) {
-		NutshellClassLoader classLoader = new NutshellClassLoader(packageName, parent, packageName);
-		Namespace namespace = new PackageNamespace(classLoader, packageName);
-		return new Assembly(packageName, namespace);
+	/**
+	 * 生成一个{@link Assembly}
+	 *
+	 * @param parent     父类装载器
+	 * @param root       类装载器的根目录
+	 * @param subpackage {@link Assembly}目录
+	 * @return {@link Assembly}
+	 */
+	public static Assembly of(ClassLoader parent, String root, String subpackage) {
+		NutshellClassLoader classLoader = new NutshellClassLoader(subpackage, parent, root);
+		Namespace namespace = new PackageNamespace(classLoader, root, subpackage);
+		return new Assembly(subpackage, namespace);
 	}
 
 	public void linkInstalls() throws Throwable {

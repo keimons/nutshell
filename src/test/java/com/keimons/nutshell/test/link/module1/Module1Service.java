@@ -17,7 +17,6 @@ public class Module1Service implements Module1Sharable {
 
 	@Override
 	public String name() {
-		System.out.println("call module1 service name " + this.hashCode());
 		return sharable.name();
 	}
 }

@@ -1,10 +1,10 @@
 package com.keimons.nutshell.test.link;
 
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.NutshellApplication;
-import com.keimons.nutshell.core.NutshellLauncher;
+import com.keimons.nutshell.test.Launcher;
 import com.keimons.nutshell.test.link.module1.Module1Sharable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
  * 测试
@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
  * @version 1.0
  * @since 11
  **/
+@ExtendWith(Launcher.class)
 public class AutolinkTest {
 
 	@Autolink
@@ -20,10 +21,9 @@ public class AutolinkTest {
 
 	@Test
 	public void test() throws Throwable {
-		NutshellApplication application = NutshellLauncher.run(this);
-		System.out.println(sharable.name());
-		application.update("com.keimons.nutshell.test.link.module1");
-		System.out.println(sharable.name());
-		System.gc();
+		while (true) {
+			System.out.println(sharable.name());
+			Thread.sleep(2000);
+		}
 	}
 }

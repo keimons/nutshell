@@ -11,7 +11,11 @@ public class Module2Service implements Module2Sharable {
 
 	@Override
 	public String name() {
-		System.out.println("call module2 service name");
+//		return test();
 		return "module2";
 	}
+
+//	public String test() {
+//		return "test module2";
+//	}
 }
