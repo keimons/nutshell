@@ -13,9 +13,11 @@ public class UpdateBootstrap implements Bootstrap {
 	}
 
 	@Override
-	public void hotswap(ApplicationContext context, Assembly assembly, List<Assembly> outbound) throws Throwable {
-		if (assembly.reset()) {
-			outbound.add(assembly);
+	public void hotswap(ApplicationContext context, List<Assembly> inbounds, List<Assembly> outbounds) throws Throwable {
+		for (Assembly assembly : inbounds) {
+			if (assembly.reset()) {
+				outbounds.add(assembly);
+			}
 		}
 	}
 }

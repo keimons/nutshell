@@ -20,9 +20,11 @@ public class AutolinkBootstrap implements Bootstrap {
 	}
 
 	@Override
-	public void hotswap(ApplicationContext context, Assembly assembly, List<Assembly> outbound) throws Throwable {
-		assembly.linkInstalls();
-		assembly.linkUpgrades();
-		outbound.add(assembly);
+	public void hotswap(ApplicationContext context, List<Assembly> inbounds, List<Assembly> outbounds) throws Throwable {
+		for (Assembly assembly : inbounds) {
+			assembly.linkInstalls();
+			assembly.linkUpgrades();
+			outbounds.add(assembly);
+		}
 	}
 }
