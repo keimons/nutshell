@@ -1,4 +1,4 @@
-package com.keimons.nutshell.test.link.module2;
+package com.keimons.nutshell.test.link.module_b;
 
 /**
  * 模拟模块2可分享的

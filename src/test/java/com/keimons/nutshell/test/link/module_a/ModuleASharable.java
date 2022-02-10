@@ -1,4 +1,4 @@
-package com.keimons.nutshell.test.link.module1;
+package com.keimons.nutshell.test.link.module_a;
 
 /**
  * 模拟模块1可分享的
@@ -7,7 +7,7 @@ package com.keimons.nutshell.test.link.module1;
  * @version 1.0
  * @since 11
  **/
-public interface Module1Sharable {
+public interface ModuleASharable {
 
 	String name();
 }
