@@ -4,6 +4,8 @@ import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.assembly.AutolinkFactory;
 
+import java.util.List;
+
 /**
  * 注入
  * <p>
@@ -22,7 +24,8 @@ public class InjectBootstrap implements Bootstrap {
 	}
 
 	@Override
-	public void hotswap(ApplicationContext context, Assembly assembly) throws Throwable {
+	public void hotswap(ApplicationContext context, Assembly assembly, List<Assembly> outbound) throws Throwable {
 		assembly.inject(context);
+		outbound.add(assembly);
 	}
 }

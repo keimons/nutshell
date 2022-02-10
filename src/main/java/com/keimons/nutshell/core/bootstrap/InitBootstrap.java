@@ -6,6 +6,7 @@ import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.internal.utils.ClassUtils;
 import com.keimons.nutshell.core.internal.utils.ThrowableUtils;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -29,8 +30,9 @@ public class InitBootstrap implements Bootstrap {
 	}
 
 	@Override
-	public void hotswap(ApplicationContext context, Assembly assembly) throws Throwable {
+	public void hotswap(ApplicationContext context, Assembly assembly, List<Assembly> outbound) throws Throwable {
 		install(context, assembly);
+		outbound.add(assembly);
 	}
 
 	private Consumer<String> consumer(ApplicationContext context, Assembly assembly) throws Throwable {
