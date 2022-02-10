@@ -30,9 +30,11 @@ public class InitBootstrap implements Bootstrap {
 	}
 
 	@Override
-	public void hotswap(ApplicationContext context, Assembly assembly, List<Assembly> outbound) throws Throwable {
-		install(context, assembly);
-		outbound.add(assembly);
+	public void hotswap(ApplicationContext context, List<Assembly> inbounds, List<Assembly> outbounds) throws Throwable {
+		for (Assembly assembly : inbounds) {
+			install(context, assembly);
+			outbounds.add(assembly);
+		}
 	}
 
 	private Consumer<String> consumer(ApplicationContext context, Assembly assembly) throws Throwable {

@@ -32,10 +32,10 @@ public interface Bootstrap {
 	/**
 	 * 更新模块
 	 *
-	 * @param context  上下文环境
-	 * @param assembly 本次安装的模块
-	 * @param outbound 流向下一个引导步
+	 * @param context   上下文环境
+	 * @param inbounds  正在hotswap的所有模块
+	 * @param outbounds 流向下一个引导步
 	 * @throws Throwable 引导安装异常，模块安装中，可能发生各种异常，所以，不能确定模块安装是否成功。
 	 */
-	void hotswap(ApplicationContext context, Assembly assembly, List<Assembly> outbound) throws Throwable;
+	void hotswap(ApplicationContext context, List<Assembly> inbounds, List<Assembly> outbounds) throws Throwable;
 }

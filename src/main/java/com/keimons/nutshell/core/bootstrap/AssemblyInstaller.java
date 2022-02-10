@@ -80,15 +80,7 @@ public class AssemblyInstaller {
 		for (Bootstrap bootstrap : bootstraps.values()) {
 			inbound = outbound;
 			outbound = new ArrayList<Assembly>();
-			for (Assembly assembly : inbound) {
-				bootstrap.hotswap(context, assembly, outbound);
-			}
+			bootstrap.hotswap(context, inbound, outbound);
 		}
-//		List<Assembly> outbound = new ArrayList<Assembly>();
-//		for (Bootstrap bootstrap : bootstraps.values()) {
-//			for (Assembly assembly : assemblies) {
-//				bootstrap.hotswap(context, assembly, outbound);
-//			}
-//		}
 	}
 }
