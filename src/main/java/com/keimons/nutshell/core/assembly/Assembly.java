@@ -136,7 +136,7 @@ public class Assembly {
 				}
 			}
 			if (!EqualsUtils.isEquals(oldCache, newCache)) {
-				System.out.println("reset: " + name);
+				System.out.println("[hotswap: Y]: " + name);
 				ClassLoader classLoader = this.namespace.getClassLoader();
 				ClassLoader parent;
 				if (classLoader instanceof HotswapClassLoader) {
@@ -155,7 +155,7 @@ public class Assembly {
 				}
 				return true;
 			} else {
-				System.out.println("not reset: " + name);
+				System.out.println("[hotswap: N]: " + name);
 			}
 		}
 		return false;
