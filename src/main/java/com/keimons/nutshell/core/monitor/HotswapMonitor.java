@@ -28,7 +28,7 @@ public class HotswapMonitor implements Runnable {
 
 	private Thread thread;
 
-	private Object last = "1";
+	private Object last;
 
 	private String dir;
 
@@ -46,11 +46,12 @@ public class HotswapMonitor implements Runnable {
 	}
 
 	public void start() {
-		if (!running) {
+		if (!this.running) {
 			this.running = true;
-			thread = new Thread(this, "Hotswap Monitor");
-			thread.setDaemon(true);
-			thread.start();
+			this.last = this.observer.getMessageInfo();
+			this.thread = new Thread(this, "Hotswap Monitor");
+			this.thread.setDaemon(true);
+			this.thread.start();
 		}
 	}
 

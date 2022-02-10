@@ -3,6 +3,8 @@ package com.keimons.nutshell.core.bootstrap;
 import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.assembly.Assembly;
 
+import java.util.List;
+
 /**
  * 引导安装/更新
  * <p>
@@ -32,7 +34,8 @@ public interface Bootstrap {
 	 *
 	 * @param context  上下文环境
 	 * @param assembly 本次安装的模块
+	 * @param outbound 流向下一个引导步
 	 * @throws Throwable 引导安装异常，模块安装中，可能发生各种异常，所以，不能确定模块安装是否成功。
 	 */
-	void hotswap(ApplicationContext context, Assembly assembly) throws Throwable;
+	void hotswap(ApplicationContext context, Assembly assembly, List<Assembly> outbound) throws Throwable;
 }

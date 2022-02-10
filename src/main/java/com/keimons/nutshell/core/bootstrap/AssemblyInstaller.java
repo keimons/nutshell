@@ -4,6 +4,7 @@ import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
 import com.keimons.nutshell.core.assembly.Assembly;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -74,10 +75,20 @@ public class AssemblyInstaller {
 	 */
 	public void hotswap(ApplicationContext context, List<Assembly> assemblies) throws Throwable {
 		assemblies.forEach(context::add);
+		List<Assembly> inbound;
+		List<Assembly> outbound = assemblies;
 		for (Bootstrap bootstrap : bootstraps.values()) {
-			for (Assembly assembly : assemblies) {
-				bootstrap.hotswap(context, assembly);
+			inbound = outbound;
+			outbound = new ArrayList<Assembly>();
+			for (Assembly assembly : inbound) {
+				bootstrap.hotswap(context, assembly, outbound);
 			}
 		}
+//		List<Assembly> outbound = new ArrayList<Assembly>();
+//		for (Bootstrap bootstrap : bootstraps.values()) {
+//			for (Assembly assembly : assemblies) {
+//				bootstrap.hotswap(context, assembly, outbound);
+//			}
+//		}
 	}
 }

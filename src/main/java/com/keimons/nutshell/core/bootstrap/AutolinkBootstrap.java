@@ -3,6 +3,8 @@ package com.keimons.nutshell.core.bootstrap;
 import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.assembly.Assembly;
 
+import java.util.List;
+
 /**
  * 链接
  *
@@ -18,8 +20,9 @@ public class AutolinkBootstrap implements Bootstrap {
 	}
 
 	@Override
-	public void hotswap(ApplicationContext context, Assembly assembly) throws Throwable {
+	public void hotswap(ApplicationContext context, Assembly assembly, List<Assembly> outbound) throws Throwable {
 		assembly.linkInstalls();
 		assembly.linkUpgrades();
+		outbound.add(assembly);
 	}
 }

@@ -123,7 +123,7 @@ public class Assembly {
 		}
 	}
 
-	public void reset() throws IOException {
+	public boolean reset() throws IOException {
 		if (this.namespace instanceof PackageNamespace) {
 			installs.clear();
 			PackageNamespace namespace = (PackageNamespace) this.namespace;
@@ -153,10 +153,12 @@ public class Assembly {
 					this.namespace.getClassBytes().put(className, bytes);
 					this.namespace.getClasses().put(className, clazz);
 				}
+				return true;
 			} else {
 				System.out.println("not reset: " + name);
 			}
 		}
+		return false;
 	}
 
 	/**
