@@ -14,32 +14,32 @@ import java.util.Map;
  **/
 public class DefaultApplicationContext implements ApplicationContext {
 
-	private Map<String, Assembly> assemblies = new HashMap<String, Assembly>();
+	private Map<String, Assembly> _assemblies = new HashMap<String, Assembly>();
 
-	private Map<String, Assembly> instances = new HashMap<String, Assembly>();
+	private Map<String, Assembly> _implements = new HashMap<String, Assembly>();
 
 	@Override
 	public void add(Assembly assembly) {
-		assemblies.put(assembly.getName(), assembly);
+		_assemblies.put(assembly.getName(), assembly);
 	}
 
 	@Override
-	public Assembly get(String packageName) {
-		return assemblies.get(packageName);
+	public Assembly findAssembly(String assemblyName) {
+		return _assemblies.get(assemblyName);
 	}
 
 	@Override
 	public Map<String, Assembly> getAssemblies() {
-		return assemblies;
+		return _assemblies;
 	}
 
 	@Override
-	public Map<String, Assembly> getInstances() {
-		return instances;
+	public Map<String, Assembly> getImplements() {
+		return _implements;
 	}
 
 	@Override
-	public Assembly findInstance(String className) {
-		return instances.get(className);
+	public Assembly findImplement(String interfaceName) {
+		return _implements.get(interfaceName);
 	}
 }

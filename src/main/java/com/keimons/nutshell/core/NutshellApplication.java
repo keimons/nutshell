@@ -55,7 +55,7 @@ public class NutshellApplication {
 	public void hotswap(String... packages) throws Throwable {
 		List<Assembly> assemblies = new ArrayList<>(packages.length);
 		for (String pkg : packages) {
-			assemblies.add(context.get(pkg));
+			assemblies.add(context.findAssembly(pkg));
 		}
 		installer.hotswap(context, assemblies);
 	}
