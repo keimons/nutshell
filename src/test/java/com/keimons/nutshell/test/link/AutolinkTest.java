@@ -7,7 +7,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
- * 测试
+ * 注入自动链接hotswap测试
+ *
+ * <pre>
+ * +------+       +----------+       +----------+       +----------+       +----------+
+ * | root | ----> | Autolink | ----> | Module A | ----> | Autolink | ----> | Module B |
+ * +------+       +----------+       +----------+       +----------+       +----------+
+ * </pre>
+ * 测试更新ModuleA和ModuleB模块，添加/移除方法和字段。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0

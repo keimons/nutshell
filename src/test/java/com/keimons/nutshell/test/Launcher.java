@@ -1,7 +1,7 @@
 package com.keimons.nutshell.test;
 
 import com.keimons.nutshell.core.NutshellLauncher;
-import com.keimons.nutshell.core.monitor.HotswapObserver;
+import com.keimons.nutshell.core.monitor.IdeaHotswapObserver;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -13,7 +13,9 @@ import java.util.Optional;
 import java.util.Properties;
 
 /**
- * Launcher
+ * 启动器
+ * <p>
+ * 监控src/test/resource/version.properties文件，当文件内容发生改变时，启动hotswap。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
@@ -33,12 +35,16 @@ public class Launcher implements ExecutionCondition {
 		return ConditionEvaluationResult.enabled("test");
 	}
 
-	static class TestObserver implements HotswapObserver<String> {
+	static class TestObserver extends IdeaHotswapObserver<String> {
 
-		String path = System.getProperty("user.dir") + File.separator + "src" + File.separator + "test" + File.separator + "resources" + File.separator + "version.properties";
+		String path = System.getProperty("user.dir") + File.separator +
+				"src" + File.separator +
+				"test" + File.separator +
+				"resources" + File.separator +
+				"version.properties";
 
 		@Override
-		public String getMessageInfo() {
+		public String getNextVersion() {
 			Properties properties = new Properties();
 			// 使用InPutStream流读取properties文件
 			try {
@@ -52,20 +58,6 @@ public class Launcher implements ExecutionCondition {
 				e.printStackTrace();
 			}
 			return null;
-		}
-
-		@Override
-		public File getHotswapFile(String message) {
-			return new File(this.getClass().getResource("/").getPath());
-//			Properties properties = new Properties();
-//			// 使用InPutStream流读取properties文件
-//			try {
-//				BufferedReader bufferedReader = new BufferedReader(new FileReader(path));
-//				properties.load(bufferedReader);
-//			} catch (Exception e) {
-//				e.printStackTrace();
-//			}
-//			return new File(properties.getProperty(message));
 		}
 	}
 }

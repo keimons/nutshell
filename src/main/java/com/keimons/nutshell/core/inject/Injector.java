@@ -81,7 +81,7 @@ class Injector {
 	 */
 	public void inject(ApplicationContext context, Assembly imports, Object instance) throws Throwable {
 		Objects.requireNonNull(instance);
-		Assembly exports = context.findInstance(injectType.getName());
+		Assembly exports = context.findImplement(injectType.getName());
 		Object proxy = AutolinkFactory.create(imports, exports, injectType);
 		injector.invoke(instance, proxy);
 	}

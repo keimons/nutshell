@@ -53,7 +53,7 @@ public class InitBootstrap implements Bootstrap {
 			Object instance = implement.getConstructor().newInstance();
 			System.out.println("instance class: " + implement.getName());
 			assembly.registerInstance(injectName, instance);
-			context.getInstances().put(injectName, assembly);
+			context.getImplements().put(injectName, assembly);
 		});
 	}
 }
