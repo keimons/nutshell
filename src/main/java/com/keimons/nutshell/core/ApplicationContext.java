@@ -1,8 +1,8 @@
 package com.keimons.nutshell.core;
 
 import com.keimons.nutshell.core.assembly.Assembly;
+import com.keimons.nutshell.core.assembly.Namespace;
 import com.keimons.nutshell.core.internal.HotswapClassLoader;
-import com.keimons.nutshell.core.internal.namespace.Namespace;
 
 import java.util.Map;
 

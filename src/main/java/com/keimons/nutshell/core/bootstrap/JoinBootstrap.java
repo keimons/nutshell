@@ -23,6 +23,6 @@ public class JoinBootstrap implements Bootstrap {
 
 	@Override
 	public void hotswap(ApplicationContext context, List<Assembly> inbounds, List<Assembly> outbounds) throws Throwable {
-		inbounds.forEach(Assembly::join);
+		inbounds.forEach(assembly -> assembly.join(true));
 	}
 }

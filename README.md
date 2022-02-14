@@ -73,7 +73,7 @@ Module B
 [hotswap: N]: com.keimons.nutshell.test.link.module_b
 instance class: com.keimons.nutshell.test.link.module_a.ModuleAService
 inject instance: class com.keimons.nutshell.test.link.module_a.ModuleAService
-class unload: interface com.keimons.nutshell.test.link.module_b.Module2Sharable
+class unload: interface com.keimons.nutshell.test.link.module_b.ModuleBSharable
 class unload: class com.keimons.nutshell.test.link.module_a.ModuleAService
 class unload: interface com.keimons.nutshell.test.link.module_a.ModuleASharable
 Module A

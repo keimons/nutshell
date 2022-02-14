@@ -1,6 +1,5 @@
-package com.keimons.nutshell.core.internal.namespace;
+package com.keimons.nutshell.core.assembly;
 
-import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.internal.HotswapClassLoader;
 
 import java.util.Map;
