@@ -33,4 +33,9 @@ public interface Hotswappable {
 	 * @throws Throwable 安装异常
 	 */
 	void hotswap(Object instance) throws Throwable;
+
+	/**
+	 * 回滚状态
+	 */
+	void rollback();
 }

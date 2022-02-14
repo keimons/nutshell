@@ -1,6 +1,7 @@
 package com.keimons.nutshell.core.internal.utils;
 
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * {@link Consumer}工具
@@ -49,6 +50,23 @@ public class ThrowableUtils {
 	}
 
 	/**
+	 * 包装{@link Runnable}以实现必检异常
+	 * <p>
+	 * 通过方法抛出{@link Throwable}，实现{@link Runnable}创建时的必检异常。
+	 * 真实的异常抛出是由{@link ThrowableRunnable}完成的，并通过{@link #juggle(Throwable)}
+	 * 欺骗编译器，致使编译器误认为这是一个{@link RuntimeException}。
+	 *
+	 * @param predicate 消费函数
+	 * @return {@link Runnable}带有必检异常的
+	 * @throws Throwable 必检异常
+	 * @see ThrowableRunnable 抛出异常的{@link Runnable}
+	 * @see #juggle(Throwable) 演示如何欺骗编译器
+	 */
+	public static <T> Predicate<T> wrapper(final ThrowablePredicate<T> predicate) throws Throwable {
+		return predicate;
+	}
+
+	/**
 	 * 欺骗编译器，让它误以为这是一个{@link RuntimeException}，以允许抛出。
 	 */
 	@SuppressWarnings("unchecked")
@@ -84,5 +102,21 @@ public class ThrowableUtils {
 		}
 
 		void run0() throws Throwable;
+	}
+
+	@FunctionalInterface
+	public interface ThrowablePredicate<T> extends Predicate<T> {
+
+		@Override
+		default boolean test(T t) {
+			try {
+				return test0(t);
+			} catch (Throwable cause) {
+				juggle(cause);
+				return false;
+			}
+		}
+
+		boolean test0(T t) throws Throwable;
 	}
 }

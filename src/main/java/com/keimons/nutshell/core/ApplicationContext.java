@@ -25,13 +25,6 @@ import java.util.Map;
 public interface ApplicationContext {
 
 	/**
-	 * 切出分支
-	 *
-	 * @return {@link ApplicationContext}分支
-	 */
-	ApplicationContext fork();
-
-	/**
 	 * 添加{@link Assembly}
 	 *
 	 * @param assembly 程序集
@@ -70,4 +63,18 @@ public interface ApplicationContext {
 	 * @return 接口对应实例映射
 	 */
 	Map<String, Assembly> getImplements();
+
+	/**
+	 * 切出分支
+	 *
+	 * @return {@link ApplicationContext}分支
+	 */
+	ApplicationContext fork();
+
+	/**
+	 * 合并分支
+	 *
+	 * @param context {@link ApplicationContext}分支
+	 */
+	void join(ApplicationContext context);
 }

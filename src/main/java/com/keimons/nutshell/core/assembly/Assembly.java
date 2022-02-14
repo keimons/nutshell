@@ -87,10 +87,6 @@ public class Assembly {
 		this.install = namespace;
 	}
 
-	public void addListener(Listener listener) {
-		listeners.add(listener);
-	}
-
 	public Map<String, Class<?>> getClasses(Bootstrap.Mode mode) {
 		if (mode == Bootstrap.Mode.INSTALL) {
 			return install.getClasses();
@@ -145,7 +141,7 @@ public class Assembly {
 	 * @return {@code true}执行hotswap，{@code false}跳过hotswap
 	 * @throws IOException hotswap异常
 	 */
-	public boolean hotswap() throws IOException {
+	public boolean fork() throws IOException {
 		if (!(this.install instanceof PackageNamespace)) {
 			this.hotswap = this.install;
 			return false;
@@ -181,13 +177,17 @@ public class Assembly {
 		return true;
 	}
 
-	public void runListeners() throws Throwable {
-		listeners.forEach(ThrowableUtils.wrapper(Listener::apply));
-	}
-
-	public void finishHotswap() {
+	public void join() {
 		install = hotswap;
 		hotswap = null;
+	}
+
+	public void addListener(Listener listener) {
+		listeners.add(listener);
+	}
+
+	public void runListeners() throws Throwable {
+		listeners.forEach(ThrowableUtils.wrapper(Listener::apply));
 	}
 
 	/**

@@ -28,6 +28,8 @@ public class AutolinkProxy implements Hotswappable, InvocationHandler {
 	 */
 	private Node node;
 
+	private Node back;
+
 	public AutolinkProxy(String interfaceName) {
 		this.interfaceName = interfaceName;
 	}
@@ -38,7 +40,16 @@ public class AutolinkProxy implements Hotswappable, InvocationHandler {
 		for (Method method : instance.getClass().getInterfaces()[0].getDeclaredMethods()) {
 			methods.put(method.getName(), method);
 		}
+		this.back = node;
 		this.node = new Node(instance, methods);
+	}
+
+	@Override
+	public void rollback() {
+		if (back != null) {
+			node = back;
+			back = null;
+		}
 	}
 
 	@Override

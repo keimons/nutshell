@@ -36,10 +36,11 @@ public class NutshellApplication {
 		context = new DefaultApplicationContext();
 		monitor = new HotswapMonitor(this, observer, root, 1000);
 
-		installer.addLast("update", new UpdateBootstrap());
-		installer.addLast("init", new InitBootstrap());
+		installer.addLast("fork", new ForkBootstrap());
+		installer.addLast("instance", new InstanceBootstrap());
 		installer.addLast("inject", new InjectBootstrap());
 		installer.addLast("autolink", new AutolinkBootstrap());
+		installer.addLast("join", new JoinBootstrap());
 
 		monitor.start();
 	}
