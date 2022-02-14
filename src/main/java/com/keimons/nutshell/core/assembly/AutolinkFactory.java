@@ -2,6 +2,7 @@ package com.keimons.nutshell.core.assembly;
 
 import com.keimons.nutshell.core.Autolink;
 import com.keimons.nutshell.core.Hotswappable;
+import com.keimons.nutshell.core.bootstrap.Bootstrap;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
@@ -31,25 +32,23 @@ public class AutolinkFactory {
 	/**
 	 * 生成一个动态代理的链接
 	 *
-	 * @param imports 导出模块
-	 * @param exports 导入模块
-	 * @param inf     导入导出节点
+	 * @param importAssembly 导出模块
+	 * @param exportAssembly 导入模块
+	 * @param inf            导入导出节点
 	 * @return 动态代理的链接
 	 * @throws Throwable 链接异常
 	 */
-	private static Object createProxyInstance(Assembly imports, Assembly exports, Class<?> inf) throws Throwable {
+	private static Object createProxyInstance(Assembly importAssembly, Assembly exportAssembly, Class<?> inf) throws Throwable {
 		final String interfaceName = inf.getName();
 		final ClassLoader loader = inf.getClassLoader();
 		Class<?> proxyClass = loader.loadClass("com.keimons.nutshell.core.assembly.AutolinkProxy");
 		Object proxy = proxyClass.getConstructor(String.class).newInstance(interfaceName);
-		imports.addListener(Listener.ListenerType.INSTALL, () -> {
-			Object instance = exports.getInstance(interfaceName);
+		exportAssembly.addListener(() -> {
+			Object instance = exportAssembly.findImplement(Bootstrap.Mode.HOTSWAP, interfaceName);
 			((Hotswappable) proxy).hotswap(instance);
 		});
-		exports.addListener(Listener.ListenerType.HOTSWAP, () -> {
-			Object instance = exports.getInstance(interfaceName);
-			((Hotswappable) proxy).hotswap(instance);
-		});
+		Object instance = exportAssembly.findImplement(Bootstrap.Mode.INSTALL, interfaceName);
+		((Hotswappable) proxy).hotswap(instance);
 		return Proxy.newProxyInstance(loader, new Class[]{inf}, (InvocationHandler) proxy);
 	}
 }

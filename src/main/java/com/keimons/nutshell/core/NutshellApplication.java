@@ -2,6 +2,7 @@ package com.keimons.nutshell.core;
 
 import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.bootstrap.*;
+import com.keimons.nutshell.core.internal.DefaultApplicationContext;
 import com.keimons.nutshell.core.internal.utils.RuntimeUtils;
 import com.keimons.nutshell.core.monitor.HotswapMonitor;
 import com.keimons.nutshell.core.monitor.HotswapObserver;

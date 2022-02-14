@@ -23,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 @ExtendWith(Launcher.class)
 public class AutolinkTest {
 
+	// 查找并注入一个ModuleASharable实现
 	@Autolink
 	public ModuleASharable sharable;
 
