@@ -25,6 +25,13 @@ import java.util.Map;
 public interface ApplicationContext {
 
 	/**
+	 * 切出分支
+	 *
+	 * @return {@link ApplicationContext}分支
+	 */
+	ApplicationContext fork();
+
+	/**
 	 * 添加{@link Assembly}
 	 *
 	 * @param assembly 程序集

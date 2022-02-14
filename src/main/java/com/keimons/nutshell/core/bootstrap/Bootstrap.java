@@ -38,4 +38,8 @@ public interface Bootstrap {
 	 * @throws Throwable 引导安装异常，模块安装中，可能发生各种异常，所以，不能确定模块安装是否成功。
 	 */
 	void hotswap(ApplicationContext context, List<Assembly> inbounds, List<Assembly> outbounds) throws Throwable;
+
+	enum Mode {
+		INSTALL, HOTSWAP
+	}
 }

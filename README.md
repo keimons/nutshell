@@ -52,6 +52,7 @@ nutshell采用注入解耦合，按照模块划分，每个模块使用单独的
 @ExtendWith(Launcher.class)
 public class AutolinkTest {
 
+	// 查找并注入一个ModuleASharable实现
 	@Autolink
 	public ModuleASharable sharable;
 

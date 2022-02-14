@@ -1,5 +1,6 @@
-package com.keimons.nutshell.core;
+package com.keimons.nutshell.core.internal;
 
+import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.assembly.Assembly;
 
 import java.util.HashMap;
@@ -19,6 +20,11 @@ public class DefaultApplicationContext implements ApplicationContext {
 	private Map<String, Assembly> _implements = new HashMap<String, Assembly>();
 
 	@Override
+	public ApplicationContext fork() {
+		return new ForkApplicationContext(this);
+	}
+
+	@Override
 	public void add(Assembly assembly) {
 		_assemblies.put(assembly.getName(), assembly);
 	}
@@ -34,12 +40,12 @@ public class DefaultApplicationContext implements ApplicationContext {
 	}
 
 	@Override
-	public Map<String, Assembly> getImplements() {
-		return _implements;
+	public Assembly findImplement(String interfaceName) {
+		return _implements.get(interfaceName);
 	}
 
 	@Override
-	public Assembly findImplement(String interfaceName) {
-		return _implements.get(interfaceName);
+	public Map<String, Assembly> getImplements() {
+		return _implements;
 	}
 }

@@ -20,13 +20,13 @@ public class InjectBootstrap implements Bootstrap {
 
 	@Override
 	public void install(ApplicationContext context, Assembly assembly) throws Throwable {
-		assembly.inject(context);
+		assembly.inject(context, Mode.INSTALL);
 	}
 
 	@Override
 	public void hotswap(ApplicationContext context, List<Assembly> inbounds, List<Assembly> outbounds) throws Throwable {
 		for (Assembly assembly : inbounds) {
-			assembly.inject(context);
+			assembly.inject(context, Mode.HOTSWAP);
 			outbounds.add(assembly);
 		}
 	}
