@@ -15,14 +15,9 @@ import java.util.Map;
  **/
 public class DefaultApplicationContext implements ApplicationContext {
 
-	private Map<String, Assembly> _assemblies = new HashMap<String, Assembly>();
+	private final Map<String, Assembly> _assemblies = new HashMap<String, Assembly>();
 
-	private Map<String, Assembly> _implements = new HashMap<String, Assembly>();
-
-	@Override
-	public ApplicationContext fork() {
-		return new ForkApplicationContext(this);
-	}
+	private final Map<String, Assembly> _implements = new HashMap<String, Assembly>();
 
 	@Override
 	public void add(Assembly assembly) {
@@ -47,5 +42,16 @@ public class DefaultApplicationContext implements ApplicationContext {
 	@Override
 	public Map<String, Assembly> getImplements() {
 		return _implements;
+	}
+
+	@Override
+	public ApplicationContext fork() {
+		return new ForkApplicationContext(this);
+	}
+
+	@Override
+	public void join(ApplicationContext context) {
+		_assemblies.putAll(context.getAssemblies());
+		_implements.putAll(context.getImplements());
 	}
 }

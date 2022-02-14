@@ -11,15 +11,15 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * 初始化
+ * 实例化
  * <p>
- * 安装程序的第一步，将正在安装的模块进行缓存。
+ * 生成需要的实例，等待被注入。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @since 11
  **/
-public class InitBootstrap implements Bootstrap {
+public class InstanceBootstrap implements Bootstrap {
 
 	@Override
 	public void install(ApplicationContext context, Assembly assembly) throws Throwable {
