@@ -40,7 +40,7 @@ public class AutolinkProxy implements Hotswappable, InvocationHandler {
 		for (Method method : instance.getClass().getInterfaces()[0].getDeclaredMethods()) {
 			methods.put(method.getName(), method);
 		}
-		this.back = node;
+//		this.back = node;
 		this.node = new Node(instance, methods);
 	}
 

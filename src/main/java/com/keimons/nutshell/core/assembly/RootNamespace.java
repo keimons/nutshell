@@ -1,7 +1,6 @@
-package com.keimons.nutshell.core.internal.namespace;
+package com.keimons.nutshell.core.assembly;
 
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.internal.utils.ClassUtils;
 
 import java.util.Set;
@@ -17,7 +16,7 @@ import java.util.Set;
  * @version 1.0
  * @since 11
  **/
-public class RootNamespace extends AbstractNamespace {
+public class RootNamespace extends AbstractNamespace<ClassLoader> {
 
 	protected final Object root;
 

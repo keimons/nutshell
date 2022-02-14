@@ -7,7 +7,7 @@ package com.keimons.nutshell.test.link.module_b;
  * @version 1.0
  * @since 11
  **/
-public class ModuleBService implements Module2Sharable {
+public class ModuleBService implements ModuleBSharable {
 
 	@Override
 	public String name() {

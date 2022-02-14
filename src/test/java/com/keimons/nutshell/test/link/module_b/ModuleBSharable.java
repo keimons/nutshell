@@ -7,7 +7,7 @@ package com.keimons.nutshell.test.link.module_b;
  * @version 1.0
  * @since 11
  **/
-public interface Module2Sharable {
+public interface ModuleBSharable {
 
 	String name();
 }

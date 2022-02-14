@@ -1,7 +1,7 @@
 package com.keimons.nutshell.test.link.module_a;
 
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.test.link.module_b.Module2Sharable;
+import com.keimons.nutshell.test.link.module_b.ModuleBSharable;
 
 /**
  * 模拟模块1
@@ -13,7 +13,7 @@ import com.keimons.nutshell.test.link.module_b.Module2Sharable;
 public class ModuleAService implements ModuleASharable {
 
 	@Autolink
-	public Module2Sharable sharable;
+	public ModuleBSharable sharable;
 
 	@Override
 	public String name() {

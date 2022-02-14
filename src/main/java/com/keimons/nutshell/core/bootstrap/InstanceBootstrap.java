@@ -25,7 +25,7 @@ public class InstanceBootstrap implements Bootstrap {
 	public void install(ApplicationContext context, Assembly assembly) throws Throwable {
 		context.getAssemblies().values().stream()
 				.flatMap(item -> item.findInjections(Autolink.class).stream())
-				.map(Class::getName).forEach(consumer(context, Mode.INSTALL, assembly))
+				.map(Class::getName).forEach(consumer(context, assembly))
 		;
 	}
 
@@ -34,15 +34,15 @@ public class InstanceBootstrap implements Bootstrap {
 		for (Assembly assembly : inbounds) {
 			context.getAssemblies().values().stream()
 					.flatMap(item -> item.findInjections(Autolink.class).stream())
-					.map(Class::getName).forEach(consumer(context, Mode.HOTSWAP, assembly))
+					.map(Class::getName).forEach(consumer(context, assembly))
 			;
 			outbounds.add(assembly);
 		}
 	}
 
-	private Consumer<String> consumer(ApplicationContext context, Mode mode, Assembly assembly) throws Throwable {
+	private Consumer<String> consumer(ApplicationContext context, Assembly assembly) throws Throwable {
 		return ThrowableUtils.wrapper(injectName -> {
-			Map<String, Class<?>> classes = assembly.getClasses(mode);
+			Map<String, Class<?>> classes = assembly.getClasses();
 			Class<?> injectType = classes.get(injectName);
 			if (injectType == null) {
 				return;
@@ -55,7 +55,7 @@ public class InstanceBootstrap implements Bootstrap {
 			}
 			Object instance = implement.getConstructor().newInstance();
 			System.out.println("instance class: " + implement.getName());
-			assembly.registerImplement(mode, injectName, instance);
+			assembly.registerImplement(injectName, instance);
 			context.getImplements().put(injectName, assembly);
 		});
 	}

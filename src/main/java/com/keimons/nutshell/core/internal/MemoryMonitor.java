@@ -1,4 +1,4 @@
-package com.keimons.nutshell.core.internal.utils;
+package com.keimons.nutshell.core.internal;
 
 import java.lang.ref.Cleaner;
 
@@ -11,7 +11,7 @@ import java.lang.ref.Cleaner;
  * @version 1.0
  * @since 11
  */
-public class CleanerUtils {
+public class MemoryMonitor {
 
 	private static final Cleaner cleaner = Cleaner.create();
 
@@ -27,6 +27,6 @@ public class CleanerUtils {
 
 	public static void register(Object object) {
 		final String name = object.toString();
-		cleaner.register(object, () -> System.out.println("class unload: " + name));
+		cleaner.register(object, () -> System.out.println("object unload: " + name));
 	}
 }

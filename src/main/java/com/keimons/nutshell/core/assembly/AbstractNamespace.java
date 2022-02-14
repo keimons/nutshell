@@ -1,6 +1,4 @@
-package com.keimons.nutshell.core.internal.namespace;
-
-import com.keimons.nutshell.core.assembly.Assembly;
+package com.keimons.nutshell.core.assembly;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,18 +21,31 @@ import java.util.concurrent.ConcurrentHashMap;
  * @version 1.0
  * @since 11
  **/
-public abstract class AbstractNamespace implements Namespace {
+public abstract class AbstractNamespace<T extends ClassLoader> implements Namespace {
 
-	protected final ClassLoader classLoader;
+	final T classLoader;
 
-	protected final Map<String, byte[]> classBytes = new HashMap<String, byte[]>();
+	final Map<String, byte[]> classBytes;
 
-	protected final Map<String, Class<?>> classes = new HashMap<String, Class<?>>();
+	final Map<String, Class<?>> classes;
 
-	protected final Map<String, Object> exports = new ConcurrentHashMap<String, Object>();
+	/**
+	 * 导出实例
+	 */
+	final Map<String, Object> exports;
 
-	protected AbstractNamespace(ClassLoader classLoader) {
+	protected AbstractNamespace(T classLoader) {
 		this.classLoader = classLoader;
+		this.classBytes = new HashMap<String, byte[]>();
+		this.classes = new HashMap<String, Class<?>>();
+		this.exports = new ConcurrentHashMap<String, Object>();
+	}
+
+	protected AbstractNamespace(T classLoader, Map<String, byte[]> classBytes, Map<String, Class<?>> classes, Map<String, Object> exports) {
+		this.classLoader = classLoader;
+		this.classBytes = classBytes;
+		this.classes = classes;
+		this.exports = exports;
 	}
 
 	@Override

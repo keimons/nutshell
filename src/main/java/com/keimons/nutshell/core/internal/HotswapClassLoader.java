@@ -2,7 +2,6 @@ package com.keimons.nutshell.core.internal;
 
 import com.keimons.nutshell.core.NutshellApplication;
 import com.keimons.nutshell.core.assembly.Assembly;
-import com.keimons.nutshell.core.internal.utils.CleanerUtils;
 import com.keimons.nutshell.core.internal.utils.FileUtils;
 
 import java.net.URL;
@@ -75,7 +74,7 @@ public class HotswapClassLoader extends URLClassLoader {
 		Class<?> clazz = findLoadedClass(className);
 		if (clazz == null) {
 			clazz = defineClass(className, bytes, 0, bytes.length);
-			CleanerUtils.register(clazz);
+			MemoryMonitor.register(clazz);
 		}
 		return clazz;
 	}

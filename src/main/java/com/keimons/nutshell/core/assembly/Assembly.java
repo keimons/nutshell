@@ -1,21 +1,14 @@
 package com.keimons.nutshell.core.assembly;
 
 import com.keimons.nutshell.core.ApplicationContext;
-import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.core.bootstrap.Bootstrap;
-import com.keimons.nutshell.core.inject.Injectors;
 import com.keimons.nutshell.core.internal.HotswapClassLoader;
-import com.keimons.nutshell.core.internal.namespace.Namespace;
-import com.keimons.nutshell.core.internal.namespace.PackageNamespace;
-import com.keimons.nutshell.core.internal.namespace.RootNamespace;
 import com.keimons.nutshell.core.internal.utils.ClassUtils;
-import com.keimons.nutshell.core.internal.utils.EqualsUtils;
 import com.keimons.nutshell.core.internal.utils.FileUtils;
-import com.keimons.nutshell.core.internal.utils.ThrowableUtils;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
-import java.util.*;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 程序集
@@ -50,145 +43,87 @@ import java.util.*;
  * @version 1.0
  * @since 11
  **/
-public class Assembly {
+public interface Assembly {
 
 	/**
 	 * 根
 	 */
-	public static final String ROOT = "ROOT";
+	String ROOT = "ROOT";
 
 	/**
-	 * 名称
-	 * <p>
-	 * 名称是{@code Assembly}的唯一标识。在整个生存周期中，只有名称是一定不变的，
-	 * 依赖名称查找{@code Assembly}。
-	 * <p>
-	 * 注意：应用程序中禁止出现两个同名的{@code Assembly}。
+	 * 获取{@code Assembly}名称
+	 *
+	 * @return {@code Assembly}名称
 	 */
-	private final String name;
+	String getName();
 
 	/**
-	 * 安装的{@code Assembly}
+	 * 获取{@code Assembly}所有的类
+	 *
+	 * @return {@code Assembly}所有的类
 	 */
-	private Namespace install;
+	Map<String, Class<?>> getClasses();
 
 	/**
-	 * 更新的{@code Assembly}
+	 * 获取{@code Assembly}所有包含该注解的类
+	 *
+	 * @param annotation 注解
+	 * @return 包含该注解的类
 	 */
-	private Namespace hotswap;
+	Set<Class<?>> findInjections(Class<? extends Annotation> annotation);
 
 	/**
-	 * 模块引用监听器
+	 * 查找接口实现对象
+	 *
+	 * @param interfaceName 接口名
+	 * @return 接口实现对象
 	 */
-	private List<Listener> listeners = new ArrayList<>();
-
-	public Assembly(String name, Namespace namespace) {
-		this.name = name;
-		this.install = namespace;
-	}
-
-	public Map<String, Class<?>> getClasses(Bootstrap.Mode mode) {
-		if (mode == Bootstrap.Mode.INSTALL) {
-			return install.getClasses();
-		} else {
-			return hotswap.getClasses();
-		}
-	}
-
-	public Set<Class<?>> findInjections(Class<? extends Annotation> annotation) {
-		if (hotswap == null) {
-			return ClassUtils.findInjections(install.getClasses().values(), annotation);
-		} else {
-			return ClassUtils.findInjections(hotswap.getClasses().values(), annotation);
-		}
-	}
-
-	public Object findImplement(Bootstrap.Mode mode, String interfaceName) {
-		if (mode == Bootstrap.Mode.INSTALL) {
-			return install.getExports().get(interfaceName);
-		} else {
-			return hotswap.getExports().get(interfaceName);
-		}
-	}
-
-	public void registerImplement(Bootstrap.Mode mode, String interfaceName, Object instance) {
-		if (mode == Bootstrap.Mode.INSTALL) {
-			install.getExports().put(interfaceName, instance);
-		} else {
-			hotswap.getExports().put(interfaceName, instance);
-		}
-	}
-
-	public void inject(ApplicationContext context, Bootstrap.Mode mode) throws Throwable {
-		Map<String, Object> exports;
-		if (mode == Bootstrap.Mode.INSTALL) {
-			exports = install.getExports();
-		} else {
-			exports = hotswap.getExports();
-		}
-		for (Object export : exports.values()) {
-			if (ClassUtils.hasAnnotation(export.getClass(), Autolink.class)) {
-				Injectors injectors = Injectors.of(export.getClass(), Autolink.class);
-				injectors.inject(context, this, export);
-				System.out.println("inject instance: " + export.getClass());
-			}
-		}
-	}
+	Object findImplement(String interfaceName);
 
 	/**
-	 * hotswap
+	 * 注册接口实现对象
+	 *
+	 * @param interfaceName 接口名
+	 * @param instance      接口实现对象
+	 */
+	void registerImplement(String interfaceName, Object instance);
+
+	/**
+	 * 注入
+	 *
+	 * @param context 上下文环境
+	 * @throws Throwable 注入异常
+	 */
+	void inject(ApplicationContext context) throws Throwable;
+
+	/**
+	 * 切出分支
 	 *
 	 * @return {@code true}执行hotswap，{@code false}跳过hotswap
 	 * @throws IOException hotswap异常
 	 */
-	public boolean fork() throws IOException {
-		if (!(this.install instanceof PackageNamespace)) {
-			this.hotswap = this.install;
-			return false;
-		}
-		PackageNamespace namespace = (PackageNamespace) this.install;
-		String subpackage = namespace.getSubpackage();
-		String root = namespace.getRoot();
-		Set<String> classNames = ClassUtils.findClasses(subpackage, true);
-		Map<String, byte[]> oldCache = namespace.getClassBytes();
-		Map<String, byte[]> newCache = new HashMap<String, byte[]>(classNames.size());
-		if (oldCache.size() == classNames.size()) {
-			for (String className : classNames) {
-				newCache.put(className, FileUtils.readClass(className));
-			}
-		}
-		if (EqualsUtils.isEquals(oldCache, newCache)) {
-			this.hotswap = this.install;
-			System.out.println("[hotswap: N]: " + name);
-			return false;
-		}
-		System.out.println("[hotswap: Y]: " + name);
-		ClassLoader classLoader = namespace.getClassLoader();
-		ClassLoader parent = ((HotswapClassLoader) classLoader).getParentClassLoader();
-		HotswapClassLoader newLoader = new HotswapClassLoader(name, parent, root);
-		this.hotswap = new PackageNamespace(newLoader, root, subpackage);
-		for (Map.Entry<String, byte[]> entry : newCache.entrySet()) {
-			String className = entry.getKey();
-			byte[] bytes = entry.getValue();
-			Class<?> clazz = newLoader.loadClass(entry.getKey(), bytes);
-			this.hotswap.getClassBytes().put(className, bytes);
-			this.hotswap.getClasses().put(className, clazz);
-		}
-		return true;
-	}
+	boolean fork() throws IOException;
 
-	public void join() {
-		install = hotswap;
-		hotswap = null;
-	}
+	/**
+	 * 合并分支
+	 *
+	 * @param success 更新是否成功
+	 */
+	void join(boolean success);
 
-	public void addListener(Listener listener) {
-		listeners.add(listener);
-	}
+	/**
+	 * 增加监听器
+	 *
+	 * @param listener 监听器
+	 */
+	void addListener(Listener listener);
 
-	public void runListeners() throws Throwable {
-		listeners.forEach(ThrowableUtils.wrapper(Listener::apply));
-	}
+	/**
+	 * 执行所有监听器
+	 *
+	 * @throws Throwable 异常
+	 */
+	void runListeners() throws Throwable;
 
 	/**
 	 * 根据根节点生成一个{@link Assembly}
@@ -197,9 +132,9 @@ public class Assembly {
 	 * @return 根Assembly
 	 * @throws ClassNotFoundException 类查找失败
 	 */
-	public static Assembly of(Object root) throws ClassNotFoundException {
-		Namespace namespace = new RootNamespace(root);
-		return new Assembly(ROOT, namespace);
+	static Assembly of(Object root) throws ClassNotFoundException {
+		RootNamespace namespace = new RootNamespace(root);
+		return new RootAssembly(ROOT, namespace);
 	}
 
 	/**
@@ -210,9 +145,9 @@ public class Assembly {
 	 * @param subpackage {@link Assembly}目录
 	 * @return {@link Assembly}
 	 */
-	public static Assembly of(ClassLoader parent, String root, String subpackage) throws IOException {
+	static Assembly of(ClassLoader parent, String root, String subpackage) throws IOException {
 		HotswapClassLoader classLoader = new HotswapClassLoader(subpackage, parent, root);
-		Namespace namespace = new PackageNamespace(classLoader, root, subpackage);
+		PackageNamespace namespace = new PackageNamespace(classLoader, root, subpackage);
 		Set<String> classNames = ClassUtils.findClasses(subpackage, true);
 		for (String className : classNames) {
 			byte[] bytes = FileUtils.readClass(className);
@@ -220,20 +155,6 @@ public class Assembly {
 			namespace.getClassBytes().put(className, bytes);
 			namespace.getClasses().put(className, clazz);
 		}
-		return new Assembly(subpackage, namespace);
-	}
-
-	/**
-	 * 获取{@code Assembly}名称
-	 *
-	 * @return {@code Assembly}名称
-	 */
-	public String getName() {
-		return name;
-	}
-
-	@Override
-	public String toString() {
-		return "assembly: name = '" + name + "'";
+		return new PackageAssembly(subpackage, namespace);
 	}
 }

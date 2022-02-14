@@ -44,5 +44,29 @@ public interface HotswapObserver<T> {
 	 */
 	File getHotswapFile(T version);
 
+	/**
+	 * 更新类型
+	 *
+	 * @param version 该版本是否全量更新
+	 * @return 是否全量更新
+	 */
+	Type getUpdateType(T version);
+
 	// TODO add hotswap finish notice.
+
+	/**
+	 * 更新类型
+	 */
+	enum Type {
+
+		/**
+		 * 整包更新
+		 */
+		COMPLETE,
+
+		/**
+		 * 增量更新
+		 */
+		INCREMENTAL
+	}
 }

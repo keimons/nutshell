@@ -15,4 +15,9 @@ public abstract class IdeaHotswapObserver<T> implements HotswapObserver<T> {
 	public File getHotswapFile(T version) {
 		return new File(this.getClass().getResource("/").getPath());
 	}
+
+	@Override
+	public Type getUpdateType(T version) {
+		return Type.COMPLETE;
+	}
 }
