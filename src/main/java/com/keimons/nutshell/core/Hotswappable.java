@@ -1,5 +1,7 @@
 package com.keimons.nutshell.core;
 
+import java.util.function.Consumer;
+
 /**
  * 热插拔的
  * <p>
@@ -25,6 +27,20 @@ package com.keimons.nutshell.core;
  * @since 11
  **/
 public interface Hotswappable {
+
+	/**
+	 * 设置是否stop-the-world
+	 *
+	 * @param stw 是否stop-the-world
+	 */
+	void stw(boolean stw, Consumer<Thread> tester);
+
+	/**
+	 * 获取当前的引用数量
+	 *
+	 * @return 引用数量
+	 */
+	int refCnt();
 
 	/**
 	 * 热插拔

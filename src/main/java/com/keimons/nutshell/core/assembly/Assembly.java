@@ -1,12 +1,14 @@
 package com.keimons.nutshell.core.assembly;
 
 import com.keimons.nutshell.core.ApplicationContext;
+import com.keimons.nutshell.core.Hotswappable;
 import com.keimons.nutshell.core.internal.HotswapClassLoader;
 import com.keimons.nutshell.core.internal.utils.ClassUtils;
 import com.keimons.nutshell.core.internal.utils.FileUtils;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -56,6 +58,20 @@ public interface Assembly {
 	 * @return {@code Assembly}名称
 	 */
 	String getName();
+
+	/**
+	 * 增加一个可热更新的对象
+	 *
+	 * @param hotswappable 可热插拔的
+	 */
+	void addHotswappable(Hotswappable hotswappable);
+
+	/**
+	 * 获取所有的可热更新对象
+	 *
+	 * @return 所有可热更新对象
+	 */
+	List<Hotswappable> getHotswappables();
 
 	/**
 	 * 获取{@code Assembly}所有的类
@@ -112,18 +128,21 @@ public interface Assembly {
 	void join(boolean success);
 
 	/**
-	 * 增加监听器
+	 * 注册事件
 	 *
-	 * @param listener 监听器
+	 * @param type  事件类型
+	 * @param event 事件监听
 	 */
-	void addListener(Listener listener);
+	void registerEvent(EventType type, Event event);
 
 	/**
-	 * 执行所有监听器
+	 * 触发事件
 	 *
+	 * @param type   事件类型
+	 * @param params 事件参数
 	 * @throws Throwable 异常
 	 */
-	void runListeners() throws Throwable;
+	void onEvent(EventType type, Object... params) throws Throwable;
 
 	/**
 	 * 根据根节点生成一个{@link Assembly}

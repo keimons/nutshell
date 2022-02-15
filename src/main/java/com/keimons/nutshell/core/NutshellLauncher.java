@@ -19,6 +19,8 @@ public class NutshellLauncher {
 
 	private static final ThreadLocal<NutshellApplication> LOCAL = new ThreadLocal<NutshellApplication>();
 
+	private static NutshellApplication app;
+
 	public static NutshellApplication run(Class<?> clazz, String... args) {
 		return null;
 	}
@@ -27,11 +29,12 @@ public class NutshellLauncher {
 		NutshellApplication application = new NutshellApplication(object, observer);
 		application.install(defaultAssemblies(object));
 		LOCAL.set(application);
+		app = application;
 		return application;
 	}
 
 	public static NutshellApplication getApplication() {
-		return LOCAL.get();
+		return app;
 	}
 
 	private static List<Assembly> defaultAssemblies(Object object) throws Exception {

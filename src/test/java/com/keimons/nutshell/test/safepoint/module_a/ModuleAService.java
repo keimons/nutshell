@@ -1,7 +1,7 @@
-package com.keimons.nutshell.test.link.module_a;
+package com.keimons.nutshell.test.safepoint.module_a;
 
 import com.keimons.nutshell.core.Autolink;
-import com.keimons.nutshell.test.link.module_b.ModuleBSharable;
+import com.keimons.nutshell.test.safepoint.module_b.ModuleBSharable;
 
 import java.util.Random;
 
@@ -21,17 +21,12 @@ public class ModuleAService implements ModuleASharable {
 
 	@Override
 	public String name() {
-//		test();
 		try {
-			Thread.sleep(1000L + random.nextInt(1));
+			Thread.sleep(1000L + random.nextInt(2000));
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-		System.out.println("Module A");
+		System.out.println("[" + Thread.currentThread().getName() + "] Module A");
 		return sharable.name();
 	}
-
-//	public void test() {
-//		System.out.println("Module A");
-//	}
 }
