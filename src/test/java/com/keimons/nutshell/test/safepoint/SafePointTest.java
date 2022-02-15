@@ -1,11 +1,12 @@
-package com.keimons.nutshell.test.link;
+package com.keimons.nutshell.test.safepoint;
 
 import com.keimons.nutshell.core.Autolink;
 import com.keimons.nutshell.core.NutshellApplication;
 import com.keimons.nutshell.core.NutshellLauncher;
 import com.keimons.nutshell.core.internal.utils.PackageUtils;
+import com.keimons.nutshell.core.internal.utils.ThrowableUtils;
 import com.keimons.nutshell.test.Launcher;
-import com.keimons.nutshell.test.link.module_a.ModuleASharable;
+import com.keimons.nutshell.test.safepoint.module_a.ModuleASharable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -26,7 +27,7 @@ import java.util.Set;
  * @since 11
  **/
 @ExtendWith(Launcher.class)
-public class AutolinkTest {
+public class SafePointTest {
 
 	// 查找并注入一个ModuleASharable实现
 	@Autolink
@@ -34,35 +35,25 @@ public class AutolinkTest {
 
 	@Test
 	public void test() throws Throwable {
-//		while (true) {
 		for (int i = 0; i < 10; i++) {
 			int index = i;
-			Thread thread = new Thread(() -> {
+			Thread thread = new Thread(ThrowableUtils.wrapper(() -> {
+				// thread 0, 2, 4, 6, 8 wait 1000ms start.
 				if ((index & 1) == 0) {
-					try {
-						Thread.sleep(1000);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
+					Thread.sleep(1000);
 				}
 				System.out.println(sharable.name());
-			}, "Thread-" + i);
+			}), "Thread-" + i);
 			thread.start();
 		}
 		NutshellApplication application = NutshellLauncher.getApplication();
 		String packageName = this.getClass().getPackageName();
 		Set<String> subpackages = PackageUtils.findSubpackages(packageName);
-		try {
-			Thread.sleep(500);
-			application.hotswap(subpackages.toArray(new String[0]));
-			System.gc();
-		} catch (Throwable e) {
-			e.printStackTrace();
-		}
-		System.out.println(sharable.name());
+
+		Thread.sleep(500);
+		application.hotswap(subpackages.toArray(new String[0]));
+		System.gc();
 
 		Thread.sleep(5000);
-//			Thread.sleep(2000);
-//		}
 	}
 }

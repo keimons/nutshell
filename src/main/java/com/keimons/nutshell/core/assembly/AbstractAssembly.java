@@ -2,15 +2,12 @@ package com.keimons.nutshell.core.assembly;
 
 import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
+import com.keimons.nutshell.core.Hotswappable;
 import com.keimons.nutshell.core.inject.Injectors;
 import com.keimons.nutshell.core.internal.utils.ClassUtils;
-import com.keimons.nutshell.core.internal.utils.ThrowableUtils;
 
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * AbstractAssembly
@@ -37,9 +34,14 @@ public abstract class AbstractAssembly<T extends Namespace> implements Assembly 
 	protected T namespace;
 
 	/**
-	 * 模块引用监听器
+	 * 关注事件列表
 	 */
-	private List<Listener> listeners = new ArrayList<>();
+	private List<Hotswappable> hotswappables = new ArrayList<Hotswappable>();
+
+	/**
+	 * 关注事件列表
+	 */
+	private Map<EventType, List<Event>> events = new HashMap<EventType, List<Event>>();
 
 	public AbstractAssembly(String name, T namespace) {
 		this.name = name;
@@ -49,6 +51,16 @@ public abstract class AbstractAssembly<T extends Namespace> implements Assembly 
 	@Override
 	public String getName() {
 		return name;
+	}
+
+	@Override
+	public void addHotswappable(Hotswappable hotswappable) {
+		hotswappables.add(hotswappable);
+	}
+
+	@Override
+	public List<Hotswappable> getHotswappables() {
+		return hotswappables;
 	}
 
 	public Map<String, Class<?>> getClasses() {
@@ -78,12 +90,20 @@ public abstract class AbstractAssembly<T extends Namespace> implements Assembly 
 		}
 	}
 
-	public void addListener(Listener listener) {
-		listeners.add(listener);
+	@Override
+	public void registerEvent(EventType type, Event event) {
+		List<Event> events = this.events.computeIfAbsent(type, v -> new ArrayList<Event>());
+		events.add(event);
 	}
 
-	public void runListeners() throws Throwable {
-		listeners.forEach(ThrowableUtils.wrapper(Listener::apply));
+	@Override
+	public void onEvent(EventType type, Object... params) throws Throwable {
+		List<Event> events = this.events.get(type);
+		if (events != null) {
+			for (Event event : events) {
+				event.onEvent(params);
+			}
+		}
 	}
 
 	@Override

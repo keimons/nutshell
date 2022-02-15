@@ -7,6 +7,9 @@ import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * 自动链接的代理
@@ -23,6 +26,8 @@ public class AutolinkProxy implements Hotswappable, InvocationHandler {
 
 	private final String interfaceName;
 
+	private final AtomicInteger referenceCounted = new AtomicInteger();
+
 	/**
 	 * 原子更新注入的对象和方法
 	 */
@@ -30,8 +35,43 @@ public class AutolinkProxy implements Hotswappable, InvocationHandler {
 
 	private Node back;
 
+	volatile Consumer<Thread> tester;
+
+	volatile boolean stw = false;
+
 	public AutolinkProxy(String interfaceName) {
 		this.interfaceName = interfaceName;
+	}
+
+	public void check() {
+		if (stw) {
+			// 这里是一个安全点线程可以在此等待。
+			// STW期间，查看栈帧是否有Hotswappable，如果有，则放行。
+			StackWalker walker = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+			Optional<StackWalker.StackFrame> optional = walker.walk(stream ->
+					stream.skip(2).filter(frame ->
+							Hotswappable.class.isAssignableFrom(frame.getDeclaringClass())
+					).findFirst()
+			);
+			if (optional.isEmpty()) {
+				Consumer<Thread> tester = this.tester;
+				if (tester != null) {
+					tester.accept(Thread.currentThread());
+				}
+			}
+		}
+	}
+
+	@Override
+	public void stw(boolean stw, Consumer<Thread> tester) {
+		System.out.println("[STW] " + stw);
+		this.tester = tester;
+		this.stw = stw;
+	}
+
+	@Override
+	public int refCnt() {
+		return referenceCounted.get();
 	}
 
 	@Override
@@ -54,10 +94,16 @@ public class AutolinkProxy implements Hotswappable, InvocationHandler {
 
 	@Override
 	public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-		Node node = this.node;
-		Object module = node.instance;
-		Method newMethod = node.methods.get(method.getName());
-		return Objects.requireNonNullElse(newMethod, method).invoke(module, args);
+		check();
+		referenceCounted.incrementAndGet();
+		try {
+			Node node = this.node;
+			Object module = node.instance;
+			Method newMethod = node.methods.get(method.getName());
+			return Objects.requireNonNullElse(newMethod, method).invoke(module, args);
+		} finally {
+			referenceCounted.decrementAndGet();
+		}
 	}
 
 	/**

@@ -1,4 +1,4 @@
-package com.keimons.nutshell.test.link.module_b;
+package com.keimons.nutshell.test.safepoint.module_b;
 
 import java.util.Random;
 
@@ -20,6 +20,6 @@ public class ModuleBService implements ModuleBSharable {
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-		return "Module B";
+		return "[" + Thread.currentThread().getName() + "] Module B";
 	}
 }
