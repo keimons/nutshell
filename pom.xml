@@ -6,6 +6,7 @@
 
     <groupId>com.keimons.nutshell</groupId>
     <artifactId>nutshell</artifactId>
+    <packaging>pom</packaging>
     <version>1.0-SNAPSHOT</version>
     <build>
         <plugins>
@@ -19,6 +20,9 @@
             </plugin>
         </plugins>
     </build>
+    <modules>
+        <module>dispenser</module>
+    </modules>
     <dependencies>
         <dependency>
             <groupId>commons-io</groupId>
@@ -30,6 +34,11 @@
             <artifactId>junit-jupiter</artifactId>
             <version>RELEASE</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.keimons.deepjson</groupId>
+            <artifactId>deepjson</artifactId>
+            <version>0.1.2-alpha</version>
         </dependency>
     </dependencies>
 
