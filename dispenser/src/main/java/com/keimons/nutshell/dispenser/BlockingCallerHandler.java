@@ -22,10 +22,6 @@ public interface BlockingCallerHandler extends RejectedHashExecutionHandler {
 	 * @param task     执行的任务
 	 * @param executor 执行线程
 	 */
-	void blockingFailure(Runnable task, HashExecutor executor);
-
 	@Override
-	default void rejectedExecution(int hash, Runnable task, HashExecutor executor) {
-		blockingFailure(task, executor);
-	}
+	void rejectedExecution(int hash, Runnable task, HashExecutor executor);
 }

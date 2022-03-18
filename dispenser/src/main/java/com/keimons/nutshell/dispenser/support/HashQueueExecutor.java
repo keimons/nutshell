@@ -1,4 +1,7 @@
-package com.keimons.nutshell.dispenser;
+package com.keimons.nutshell.dispenser.support;
+
+import com.keimons.nutshell.dispenser.AbstractHashExecutor;
+import com.keimons.nutshell.dispenser.RejectedHashExecutionHandler;
 
 import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;

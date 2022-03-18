@@ -2,6 +2,7 @@ package com.keimons.nutshell.dispenser;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * 哈希任务执行器
@@ -41,11 +42,12 @@ import java.util.concurrent.Future;
  *         }
  *     }
  * </pre>
- * 同样，哈希任务执行器也支持共享任务队列的线程池，当且仅当当前任务执行完成时，
- * 才会在任务队列中取出任务并执行。
+ * 同样，哈希任务执行器也支持共享任务队列的线程池，它是{@link ThreadPoolExecutor}的拓展，
+ * 当且仅当当前任务执行完成时，才会在任务队列中取出任务并执行。
  * <p>
  * 哈希任务执行器支持任务插入队首，{@code **Now}但并不能保证会被立即执行，在多线程环境中，
  * 即便任务是当前处于队首，但依然有可能在执行之前，被其它线程插入其它任务。
+ * <p>
  * 即时执行器和共享队列执行器可能不需要使用哈希值，该值有可能被忽略。
  *
  * @author houyn[monkey@keimons.com]
@@ -62,7 +64,7 @@ public interface HashExecutor {
 	String getName();
 
 	/**
-	 * 获取策略线程池大小
+	 * 获取线程池大小
 	 *
 	 * @return 线程池大小
 	 */
@@ -95,7 +97,7 @@ public interface HashExecutor {
 	/**
 	 * 提交任务
 	 * <p>
-	 * 该方法可能会阻塞当前线程，直到任务执行完毕
+	 * 该方法可能会阻塞当前线程，直到任务执行完毕。
 	 *
 	 * @param hash 哈希值
 	 * @param task 任务
