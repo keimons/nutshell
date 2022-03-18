@@ -1,5 +1,8 @@
 package com.keimons.nutshell.dispenser;
 
+import com.keimons.nutshell.dispenser.support.DirectExecutor;
+import com.keimons.nutshell.dispenser.support.HashQueueExecutor;
+import com.keimons.nutshell.dispenser.support.SharedQueueExecutor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Range;
 
@@ -12,9 +15,9 @@ import java.util.Objects;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @see DirectExecutor 无操作任务执行策略
- * @see SharedQueueExecutor 线程池任务执行策略
- * @see HashQueueExecutor 线程码任务执行策略
+ * @see DirectExecutor 即时执行器（无队列）
+ * @see SharedQueueExecutor 共享队列执行器
+ * @see HashQueueExecutor 哈希队列执行器
  * @since 11
  **/
 public class ExecutorManager {

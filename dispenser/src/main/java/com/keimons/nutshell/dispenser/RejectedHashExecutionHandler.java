@@ -34,7 +34,6 @@ public interface RejectedHashExecutionHandler {
 	 * 哈希线程池设计时在一定意义上规避了一些并发问题，当被拒绝执行的任务采用本地执行，
 	 * 或自定义策略时，应注意这将造成额外的并发问题。这是危险的。
 	 *
-	 *
 	 * @param hash
 	 * @param task     请求执行的任务
 	 * @param executor 任务的执行者
