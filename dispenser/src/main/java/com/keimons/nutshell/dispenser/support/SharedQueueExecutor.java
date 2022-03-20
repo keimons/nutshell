@@ -11,8 +11,24 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * 共享队列执行器
  * <p>
- * 共享队列执行器是{@link ThreadPoolExecutor}拓展。添加了对于{@link HashExecutor}的支持。
- * 提供了排队功能，而排队功能（暂时）无法使用动态线程数量。
+ * 共享队列执行器是{@link ThreadPoolExecutor}拓展，添加了对于{@link HashExecutor}的支持。
+ * <dl>
+ *     <dt>固定线程数量</dt>
+ *     <dd>共享队列执行器仅支持固定数量的线程池，这也意味着它在运行时更改线程数量是无效的。
+ *     不论任务排队与否，都不会创建/销毁线程池。初始化时直接初始化所有线程，而不是等到任务的提交。
+ *     <dt>排队</dt>
+ *     <dd>共享队列线程池使用{@link LinkedBlockingDeque}，并基于此实现了插队功能。此队列的使用与线程池的交互：
+ *     <ul>
+ *         <li>{@code execute/commit}总是将任务追加到队尾。</li>
+ *         <li>{@code executeNow/commitNow}总是将任务插入到队首。</li>
+ *     </ul>
+ *     尽管共享队列执行器提供了插队执行，但是并不能保证任务将会被立即执行，因为它可能被其它任务再次插队。
+ *     任务排队的策略有以下几种：
+ *     <ol>
+ *         <li><em>无界队列/有界队列</em>。任务将直接追加到队尾或插入队首。</li>
+ *         <li><em>阻塞策略</em>。阻塞提交者线程，直到成功将任务放入队列中。</li>
+ *     </ol>
+ * </dl>
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0

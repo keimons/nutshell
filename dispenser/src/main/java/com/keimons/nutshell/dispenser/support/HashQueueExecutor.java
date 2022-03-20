@@ -25,7 +25,7 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 		super(name, nThreads, rejectedHandler);
 		executors = new AbstractExecutor[nThreads];
 		for (int i = 0; i < nThreads; i++) {
-			UnboundedExecutor executor = new UnboundedExecutor(rejectedHandler);
+			UnboundedExecutor executor = new UnboundedExecutor();
 			executor.thread.start();
 			executors[i] = executor;
 		}
@@ -82,8 +82,6 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 		 */
 		protected volatile boolean running = true;
 
-		protected final RejectedHashExecutionHandler rejectedHandler;
-
 		protected final Thread thread;
 
 		/**
@@ -91,8 +89,7 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 		 * <p>
 		 * 消息的真正执行者
 		 */
-		public AbstractExecutor(RejectedHashExecutionHandler rejectedHandler) {
-			this.rejectedHandler = rejectedHandler;
+		public AbstractExecutor() {
 			this.thread = threadFactory.newThread(this);
 		}
 
@@ -197,8 +194,7 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 		 * <p>
 		 * 消息的真正执行者
 		 */
-		public UnboundedExecutor(RejectedHashExecutionHandler rejectedHandler) {
-			super(rejectedHandler);
+		public UnboundedExecutor() {
 			this.queue = new LinkedBlockingDeque<>();
 		}
 
@@ -220,28 +216,28 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 		@Override
 		public Future<?> submit(Runnable task) {
 			RunnableFuture<Void> future = new FutureTask<>(task, null);
-			queue.offerLast(future);
+			execute(future);
 			return future;
 		}
 
 		@Override
 		public Future<?> submitNow(Runnable task) {
 			RunnableFuture<Void> future = new FutureTask<>(task, null);
-			queue.offerFirst(future);
+			executeNow(future);
 			return future;
 		}
 
 		@Override
 		public <T> FutureTask<T> submit(Callable<T> task) {
 			FutureTask<T> future = new FutureTask<>(task);
-			queue.offerLast(future);
+			execute(future);
 			return future;
 		}
 
 		@Override
 		public <T> FutureTask<T> submitNow(Callable<T> task) {
 			FutureTask<T> future = new FutureTask<>(task);
-			queue.offerFirst(future);
+			executeNow(future);
 			return future;
 		}
 
@@ -278,8 +274,7 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 
 		private volatile int readerIndex;
 
-		public FixedExecutor(RejectedHashExecutionHandler rejectedHandler, int length) {
-			super(rejectedHandler);
+		public FixedExecutor(int length) {
 			this.length = length;
 			this.queue = new Runnable[length];
 		}

@@ -31,6 +31,9 @@ public abstract class AbstractHashExecutor implements HashExecutor {
 	 */
 	protected ThreadFactory threadFactory = Executors.defaultThreadFactory();
 
+	/**
+	 * 被拒绝执行的任务处理句柄
+	 */
 	protected final RejectedHashExecutionHandler rejectedHandler;
 
 	/**
@@ -40,6 +43,13 @@ public abstract class AbstractHashExecutor implements HashExecutor {
 	 */
 	protected final boolean blockingCaller;
 
+	/**
+	 * 哈希任务执行器
+	 *
+	 * @param name            执行器名称
+	 * @param nThreads        线程数量
+	 * @param rejectedHandler 被拒绝执行任务的处理句柄
+	 */
 	public AbstractHashExecutor(String name, int nThreads, RejectedHashExecutionHandler rejectedHandler) {
 		this.name = name;
 		this.nThreads = nThreads;
