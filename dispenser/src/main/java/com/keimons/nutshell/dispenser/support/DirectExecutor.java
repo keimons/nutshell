@@ -66,7 +66,12 @@ public class DirectExecutor extends AbstractHashExecutor {
 	}
 
 	@Override
-	public void shutdown() {
+	public boolean isShutdown() {
+		return running;
+	}
 
+	@Override
+	public void shutdown() {
+		// do nothing
 	}
 }
