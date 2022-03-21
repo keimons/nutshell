@@ -146,6 +146,8 @@ public interface HashExecutor {
 		throw new UnsupportedOperationException();
 	}
 
+	boolean isShutdown();
+
 	/**
 	 * 关闭线程池
 	 */

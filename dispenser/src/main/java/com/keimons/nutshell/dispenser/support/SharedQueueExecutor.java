@@ -132,7 +132,6 @@ public class SharedQueueExecutor extends ThreadPoolExecutor implements HashExecu
 				lock.lockInterruptibly();
 				try {
 					notFull.signal();
-					System.out.println("notify signal");
 				} finally {
 					lock.unlock();
 				}
@@ -157,7 +156,6 @@ public class SharedQueueExecutor extends ThreadPoolExecutor implements HashExecu
 		try {
 			execute(task);
 		} catch (InternalException e) {
-			System.out.println("go reject");
 			reject(hash, task, true);
 		}
 	}

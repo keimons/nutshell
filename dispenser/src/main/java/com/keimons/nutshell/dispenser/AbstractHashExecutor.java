@@ -43,6 +43,8 @@ public abstract class AbstractHashExecutor implements HashExecutor {
 	 */
 	protected final boolean blockingCaller;
 
+	protected volatile boolean running = true;
+
 	/**
 	 * 哈希任务执行器
 	 *

@@ -33,36 +33,56 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 
 	@Override
 	public void execute(int hash, Runnable task) {
-		executors[hash % nThreads].execute(task);
+		if (!running) {
+			rejectedHandler.rejectedExecution(hash, task, this);
+		}
+		executors[hash % nThreads].execute(hash, task);
 	}
 
 	@Override
 	public void executeNow(int hash, Runnable task) {
-		executors[hash % nThreads].executeNow(task);
+		if (!running) {
+			rejectedHandler.rejectedExecution(hash, task, this);
+		}
+		executors[hash % nThreads].executeNow(hash, task);
 	}
 
 	@Override
 	public Future<?> submit(int hash, Runnable task) {
-		return executors[hash % nThreads].submit(task);
+		RunnableFuture<Void> future = new FutureTask<>(task, null);
+		execute(hash, future);
+		return future;
 	}
 
 	@Override
 	public Future<?> submitNow(int hash, Runnable task) {
-		return executors[hash % nThreads].submitNow(task);
+		RunnableFuture<Void> future = new FutureTask<>(task, null);
+		executeNow(hash, future);
+		return future;
 	}
 
 	@Override
 	public <T> Future<T> submit(int hash, Callable<T> task) {
-		return executors[hash % nThreads].submit(task);
+		FutureTask<T> future = new FutureTask<>(task);
+		execute(hash, future);
+		return future;
 	}
 
 	@Override
 	public <T> Future<T> submitNow(int hash, Callable<T> task) {
-		return executors[hash % nThreads].submitNow(task);
+		FutureTask<T> future = new FutureTask<>(task);
+		executeNow(hash, future);
+		return future;
+	}
+
+	@Override
+	public boolean isShutdown() {
+		return !running;
 	}
 
 	@Override
 	public void shutdown() {
+		running = false;
 		for (AbstractExecutor executor : executors) {
 			executor.shutdown();
 		}
@@ -77,12 +97,17 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 	 **/
 	private abstract class AbstractExecutor implements Runnable {
 
-		/**
-		 * 是否执行中
-		 */
-		protected volatile boolean running = true;
-
 		protected final Thread thread;
+
+		/**
+		 * 主锁
+		 */
+		protected final ReentrantLock lock = new ReentrantLock();
+
+		/**
+		 * 等待条件
+		 */
+		protected final Condition notFull = lock.newCondition();
 
 		/**
 		 * 执行器
@@ -93,61 +118,83 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 			this.thread = threadFactory.newThread(this);
 		}
 
+		/**
+		 * 增加一个任务
+		 *
+		 * @param hash 哈希值
+		 * @param task 队尾
+		 */
+		public void execute(int hash, Runnable task) {
+			if (!offerLast(task)) {
+				reject(hash, task, true);
+			}
+		}
+
+		/**
+		 * 增加一个任务
+		 *
+		 * @param hash 哈希值
+		 * @param task 队尾
+		 */
+		public void executeNow(int hash, Runnable task) {
+			if (!offerFirst(task)) {
+				reject(hash, task, false);
+			}
+		}
+
+		/**
+		 * 拒绝一个任务
+		 *
+		 * @param hash 哈希值
+		 * @param task 任务
+		 * @param last 是否队尾
+		 */
+		protected void reject(int hash, Runnable task, boolean last) {
+			// 检测线程池是否已经关闭，如果线程池关闭，则直接调用拒绝策略
+			// 是否阻塞提交者并等待空余位置，如果是，那么阻塞提交者
+			if (running && blockingCaller) {
+				try {
+					// 检测当前线程是否被打断，如果被打断了，那么什么都不处理。
+					lock.lockInterruptibly();
+					try {
+						while (last ? !offerLast(task) : !offerFirst(task)) {
+							notFull.await();
+							// 线程被唤醒后，先检查线程池是否关闭，线程池关闭时，也会唤醒所有等待中的线程
+							if (!running) {
+								rejectedHandler.rejectedExecution(hash, task, HashQueueExecutor.this);
+								return;
+							}
+						}
+					} finally {
+						lock.unlock();
+					}
+				} catch (InterruptedException ex) {
+					// 回复被打断的状态
+					Thread.currentThread().interrupt();
+				}
+			} else {
+				rejectedHandler.rejectedExecution(hash, task, HashQueueExecutor.this);
+			}
+		}
+
+		protected void beforeExecute() {
+			try {
+				lock.lockInterruptibly();
+				try {
+					notFull.signal();
+				} finally {
+					lock.unlock();
+				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}
+
 		protected abstract Runnable next() throws InterruptedException;
 
-		protected void after() {
+		protected abstract boolean offerFirst(Runnable task);
 
-		}
-
-		/**
-		 * 增加一个任务
-		 *
-		 * @param task 队尾
-		 */
-		public abstract void execute(Runnable task);
-
-		/**
-		 * 增加一个任务
-		 *
-		 * @param task 队尾
-		 */
-		public void executeNow(Runnable task) {
-			throw new UnsupportedOperationException();
-		}
-
-		/**
-		 * 增加一个任务
-		 *
-		 * @param task 队尾
-		 */
-		public abstract Future<?> submit(Runnable task);
-
-		/**
-		 * 增加一个任务
-		 *
-		 * @param task 队尾
-		 */
-		public Future<?> submitNow(Runnable task) {
-			throw new UnsupportedOperationException();
-		}
-
-		/**
-		 * 增加一个任务
-		 *
-		 * @param task 队尾
-		 * @return 是否成功
-		 */
-		public abstract <T> FutureTask<T> submit(Callable<T> task);
-
-		/**
-		 * 增加一个任务
-		 *
-		 * @param task 队尾
-		 * @return 是否成功
-		 */
-		public <T> FutureTask<T> submitNow(Callable<T> task) {
-			throw new UnsupportedOperationException();
-		}
+		protected abstract boolean offerLast(Runnable task);
 
 		/**
 		 * 关闭线程
@@ -162,8 +209,8 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 						Runnable runnable = null;
 						try {
 							runnable = next();
+							beforeExecute();
 							runnable.run();
-							after();
 						} catch (Throwable e) {
 							// ignore
 						}
@@ -177,6 +224,8 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 
 	/**
 	 * 无界队列执行器
+	 * <p>
+	 * 无界队列不考虑插队失败的情况，当发生插队失败，是直接
 	 *
 	 * @author houyn[monkey@keimons.com]
 	 * @version 1.0
@@ -204,49 +253,28 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 		}
 
 		@Override
-		public void execute(Runnable task) {
-			queue.offerLast(task);
+		protected boolean offerFirst(Runnable task) {
+			return queue.offerFirst(task);
 		}
 
 		@Override
-		public void executeNow(Runnable task) {
-			queue.offerFirst(task);
-		}
-
-		@Override
-		public Future<?> submit(Runnable task) {
-			RunnableFuture<Void> future = new FutureTask<>(task, null);
-			execute(future);
-			return future;
-		}
-
-		@Override
-		public Future<?> submitNow(Runnable task) {
-			RunnableFuture<Void> future = new FutureTask<>(task, null);
-			executeNow(future);
-			return future;
-		}
-
-		@Override
-		public <T> FutureTask<T> submit(Callable<T> task) {
-			FutureTask<T> future = new FutureTask<>(task);
-			execute(future);
-			return future;
-		}
-
-		@Override
-		public <T> FutureTask<T> submitNow(Callable<T> task) {
-			FutureTask<T> future = new FutureTask<>(task);
-			executeNow(future);
-			return future;
+		protected boolean offerLast(Runnable task) {
+			return queue.offerLast(task);
 		}
 
 		@Override
 		public void shutdown() {
-			running = false;
-			// 增加一个空消息，保证能够正常结束任务
-			queue.add(() -> {
-			});
+			try {
+				lock.lockInterruptibly();
+				try {
+					notFull.signal();
+					notFull.signalAll();
+				} finally {
+					lock.unlock();
+				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
 		}
 	}
 
@@ -295,12 +323,22 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 		}
 
 		@Override
-		protected void after() {
+		protected boolean offerFirst(Runnable task) {
+			return false;
+		}
+
+		@Override
+		protected boolean offerLast(Runnable task) {
+			return false;
+		}
+
+		@Override
+		protected void beforeExecute() {
 			notFull.signal();
 		}
 
 		@Override
-		public void execute(Runnable task) {
+		public void execute(int hash, Runnable task) {
 			lock.lock();
 			try {
 				for (; ; ) {
@@ -320,19 +358,6 @@ public class HashQueueExecutor extends AbstractHashExecutor {
 			} finally {
 				lock.unlock();
 			}
-		}
-
-		@Override
-		public Future<?> submit(Runnable task) {
-			RunnableFuture<Void> future = new FutureTask<>(task, null);
-
-			return future;
-		}
-
-		@Override
-		public <T> FutureTask<T> submit(Callable<T> task) {
-			FutureTask<T> future = new FutureTask<>(task);
-			return future;
 		}
 
 		@Override
