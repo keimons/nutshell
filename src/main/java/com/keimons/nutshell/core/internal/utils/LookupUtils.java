@@ -1,6 +1,6 @@
 package com.keimons.nutshell.core.internal.utils;
 
-import jdk.internal.misc.Unsafe;
+import sun.misc.Unsafe;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -18,7 +18,7 @@ public class LookupUtils {
 
 	static {
 		MethodHandles.Lookup lookup0 = null;
-		Unsafe unsafe = Unsafe.getUnsafe();
+		Unsafe unsafe = UnsafeUtils.getUnsafe();
 		try {
 			// 尝试查找受信任的包级私有的 MethodHandles.Lookup#IMPL_LOOKUP
 			long offset = unsafe.staticFieldOffset(MethodHandles.Lookup.class.getDeclaredField("IMPL_LOOKUP"));

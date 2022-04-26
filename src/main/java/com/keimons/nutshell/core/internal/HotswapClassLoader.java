@@ -102,6 +102,11 @@ public class HotswapClassLoader extends URLClassLoader {
 		return parent;
 	}
 
+	@Override
+	public String toString() {
+		return "HotswapClassLoader(" + getName() + ')';
+	}
+
 	/**
 	 * 装载策略
 	 */

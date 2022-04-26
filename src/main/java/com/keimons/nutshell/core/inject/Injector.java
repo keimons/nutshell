@@ -4,9 +4,9 @@ import com.keimons.nutshell.core.ApplicationContext;
 import com.keimons.nutshell.core.Autolink;
 import com.keimons.nutshell.core.assembly.Assembly;
 import com.keimons.nutshell.core.assembly.AutolinkFactory;
+import com.keimons.nutshell.core.internal.utils.LookupUtils;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.util.Objects;
 
@@ -64,7 +64,7 @@ class Injector {
 	 */
 	public Injector(Field field) throws Exception {
 		injectType = field.getType();
-		injector = MethodHandles.lookup().unreflectSetter(field);
+		injector = LookupUtils.lookup().unreflectSetter(field);
 	}
 
 	/**
