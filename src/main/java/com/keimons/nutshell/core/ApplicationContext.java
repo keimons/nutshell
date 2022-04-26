@@ -7,7 +7,7 @@ import com.keimons.nutshell.core.internal.HotswapClassLoader;
 import java.util.Map;
 
 /**
- * 上下文环境
+ * 全局上下文环境
  * <p>
  * 存储应用程序或服务的运行时信息，包括：
  * <ul>
@@ -17,12 +17,13 @@ import java.util.Map;
  * 上下文环境中，所有的{@code key}都应该是用字符串。参考{@link HotswapClassLoader}，
  * 同一个{@code interface}由不同的类装载器装载，造成{@code com.A != com.A}的假象。
  * 我们只能使用{@link HotswapClassLoader}装载器装载范围以外的对象作为{@code key}。
+ * <p>
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @since 11
  **/
-public interface ApplicationContext {
+public interface ApplicationContext extends Context {
 
 	/**
 	 * 添加{@link Assembly}

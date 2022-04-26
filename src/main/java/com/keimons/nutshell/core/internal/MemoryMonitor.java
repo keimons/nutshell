@@ -3,9 +3,9 @@ package com.keimons.nutshell.core.internal;
 import java.lang.ref.Cleaner;
 
 /**
- * 垃圾回收工具
+ * 内存监控
  * <p>
- * 监控对象回收情况
+ * 监控对象回收情况，当被监控的对象发生回收时，打印一行日志。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
@@ -27,6 +27,6 @@ public class MemoryMonitor {
 
 	public static void register(Object object) {
 		final String name = object.toString();
-		cleaner.register(object, () -> System.out.println("object unload: " + name));
+		cleaner.register(object, () -> System.out.println("object destory: " + name));
 	}
 }
