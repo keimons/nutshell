@@ -1,6 +1,9 @@
 package com.keimons.nutshell.disruptor.internal;
 
+import com.keimons.nutshell.disruptor.Debug;
 import com.keimons.nutshell.disruptor.TrackBarrier;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 比特轨道屏障
@@ -32,12 +35,16 @@ public class BitsTrackBarrier implements TrackBarrier {
 	 */
 	private final Object[][] fences;
 
+	private final AtomicInteger forbids = new AtomicInteger();
+
 	/**
 	 * 任务位置
 	 * <p>
-	 * 共有{@link #nTracks}条轨道，当前任务所处的轨道位置（可能不止一个）。轨道数量不超过64，所以使用{@code bit}存储。
+	 * 共有{@link #nTracks}条轨道，当前任务所处的轨道位置（可能不止一个）。轨道数量不超过64，所以使用{@code bits}存储。
 	 */
 	private long bits;
+
+	private volatile boolean intercepted;
 
 	public BitsTrackBarrier(int nTracks) {
 		if (nTracks > 64) {
@@ -48,8 +55,7 @@ public class BitsTrackBarrier implements TrackBarrier {
 		this.nTracks = nTracks;
 	}
 
-	@Override
-	public void init(Object fence) {
+	private void init0(Object fence) {
 		if (fence == null) {
 			throw new NullPointerException();
 		}
@@ -69,16 +75,27 @@ public class BitsTrackBarrier implements TrackBarrier {
 	}
 
 	@Override
+	public void init(Object fence) {
+		init0(fence);
+		this.intercepted = true;
+		this.forbids.set(Long.bitCount(bits) - 1);
+	}
+
+	@Override
 	public void init(Object fence0, Object fence1) {
-		init(fence0);
-		init(fence1);
+		init0(fence0);
+		init0(fence1);
+		this.intercepted = true;
+		this.forbids.set(Long.bitCount(bits) - 1);
 	}
 
 	@Override
 	public void init(Object fence0, Object fence1, Object fence2) {
-		init(fence0);
-		init(fence1);
-		init(fence2);
+		init0(fence0);
+		init0(fence1);
+		init0(fence2);
+		this.intercepted = true;
+		this.forbids.set(Long.bitCount(bits) - 1);
 	}
 
 	@Override
@@ -86,15 +103,33 @@ public class BitsTrackBarrier implements TrackBarrier {
 		if (fences.length == 0) {
 			throw new IllegalArgumentException("no keys");
 		}
-		for (int i = 0; i < fences.length; i++) {
+		for (int i = 0, length = fences.length; i < length; i++) {
 			Object key = fences[i];
-			init(key);
+			init0(key);
 		}
+		this.intercepted = true;
+		this.forbids.set(Long.bitCount(bits) - 1);
 	}
 
 	@Override
-	public int intercept() {
-		return Long.bitCount(bits) - 1;
+	public void init(int forbids) {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public boolean intercept() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public boolean tryIntercept() {
+		Debug.info(toString() + ": " + forbids.get());
+		return forbids.getAndDecrement() > 0;
+	}
+
+	@Override
+	public boolean isIntercepted() {
+		return intercepted;
 	}
 
 	@Override
@@ -150,5 +185,6 @@ public class BitsTrackBarrier implements TrackBarrier {
 			}
 		}
 		this.bits = 0L;
+		this.intercepted = false;
 	}
 }
