@@ -75,10 +75,10 @@ public interface TrackExecutor {
 	 * <p>
 	 * 依赖于不同的实现，该任务可能在新线程池或线程中执行，也可能直接使用调用者的线程立即执行。
 	 *
-	 * @param barrier 执行屏障
-	 * @param task    任务
+	 * @param task  任务
+	 * @param fence 执行屏障
 	 */
-	void execute(TrackBarrier barrier, Runnable task);
+	void execute(Runnable task, Object fence);
 
 	/**
 	 * 提交任务（立即执行）
@@ -86,11 +86,11 @@ public interface TrackExecutor {
 	 * 将提交的任务置于队首，尽可能的立即执行，但是并不能保证会被立即执行。
 	 * 多线程情况下，即便是置于队首的任务，也有可能在执行之前，被其它任务挤占。
 	 *
-	 * @param barrier 执行屏障
 	 * @param task    任务
+	 * @param barrier 执行屏障
 	 * @throws UnsupportedOperationException 部分实现可能不支持此操作
 	 */
-	default void executeNow(TrackBarrier barrier, Runnable task) {
+	default void executeNow(Runnable task, TrackBarrier barrier) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -99,11 +99,11 @@ public interface TrackExecutor {
 	 * <p>
 	 * 该方法可能会阻塞当前线程，直到任务执行完毕。
 	 *
-	 * @param barrier 执行屏障
 	 * @param task    任务
+	 * @param barrier 执行屏障
 	 * @return 待完成任务的异步计算的结果
 	 */
-	Future<?> submit(TrackBarrier barrier, Runnable task);
+	Future<?> submit(Runnable task, TrackBarrier barrier);
 
 	/**
 	 * 提交任务（立即执行）
@@ -111,24 +111,24 @@ public interface TrackExecutor {
 	 * 将提交的任务置于队首，尽可能的立即执行，但是并不能保证会被立即执行。
 	 * 多线程情况下，即便是置于队首的任务，也有可能在执行之前，被其它任务挤占。
 	 *
-	 * @param barrier 执行屏障
 	 * @param task    任务
+	 * @param barrier 执行屏障
 	 * @return 待完成任务的异步计算的结果
 	 * @throws UnsupportedOperationException 部分实现可能不支持此操作
 	 */
-	default Future<?> submitNow(TrackBarrier barrier, Runnable task) {
+	default Future<?> submitNow(Runnable task, TrackBarrier barrier) {
 		throw new UnsupportedOperationException();
 	}
 
 	/**
 	 * 提交任务
 	 *
-	 * @param barrier 执行屏障
-	 * @param task    任务
 	 * @param <T>     返回值类型
+	 * @param task    任务
+	 * @param barrier 执行屏障
 	 * @return 待完成任务的异步计算的结果
 	 */
-	<T> Future<T> submit(TrackBarrier barrier, Callable<T> task);
+	<T> Future<T> submit(Callable<T> task, TrackBarrier barrier);
 
 	/**
 	 * 提交任务（立即执行）
@@ -136,13 +136,13 @@ public interface TrackExecutor {
 	 * 将提交的任务置于队首，尽可能的立即执行，但是并不能保证会被立即执行。
 	 * 多线程情况下，即便是置于队首的任务，也有可能在执行之前，被其它任务挤占。
 	 *
-	 * @param barrier 执行屏障
-	 * @param task    任务
 	 * @param <T>     返回值类型
+	 * @param task    任务
+	 * @param barrier 执行屏障
 	 * @return 待完成任务的异步计算的结果
 	 * @throws UnsupportedOperationException 部分实现可能不支持此操作
 	 */
-	default <T> Future<T> submitNow(TrackBarrier barrier, Callable<T> task) {
+	default <T> Future<T> submitNow(Callable<T> task, TrackBarrier barrier) {
 		throw new UnsupportedOperationException();
 	}
 

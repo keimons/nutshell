@@ -120,7 +120,7 @@ public class LinkedCommitterPolicy implements CommitterStrategy {
 					return;
 				}
 				TrackExecutor strategy = ExecutorManager.getExecutorStrategy(work.getExecutorStrategy());
-				strategy.execute(work.getBarrier(), buildLinkedTask(work));
+				strategy.execute(buildLinkedTask(work), work.getBarrier());
 			}
 		}
 

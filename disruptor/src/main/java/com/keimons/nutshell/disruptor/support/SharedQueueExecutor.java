@@ -100,7 +100,7 @@ public class SharedQueueExecutor extends ThreadPoolExecutor implements TrackExec
 		}
 	}
 
-	private void reject(TrackBarrier barrier, Runnable task, boolean last) {
+	private void reject(Object fence, Runnable task, boolean last) {
 		// 检测线程池是否已经关闭，如果线程池关闭，则直接调用拒绝策略
 		if (!isShutdown() && blockingCaller) {
 			try {
@@ -110,7 +110,7 @@ public class SharedQueueExecutor extends ThreadPoolExecutor implements TrackExec
 						notFull.await();
 						// 线程被唤醒后，先检查线程池是否关闭。
 						if (isShutdown()) {
-							rejectedHandler.rejectedExecution(barrier, task, this);
+							rejectedHandler.rejectedExecution(fence, task, this);
 							return;
 						}
 					}
@@ -121,7 +121,7 @@ public class SharedQueueExecutor extends ThreadPoolExecutor implements TrackExec
 				Thread.currentThread().interrupt();
 			}
 		} else {
-			rejectedHandler.rejectedExecution(barrier, task, this);
+			rejectedHandler.rejectedExecution(fence, task, this);
 		}
 	}
 
@@ -153,16 +153,16 @@ public class SharedQueueExecutor extends ThreadPoolExecutor implements TrackExec
 	}
 
 	@Override
-	public void execute(TrackBarrier barrier, Runnable task) {
+	public void execute(Runnable task, Object fence) {
 		try {
 			execute(task);
 		} catch (InternalException e) {
-			reject(barrier, task, true);
+			reject(fence, task, true);
 		}
 	}
 
 	@Override
-	public void executeNow(TrackBarrier barrier, Runnable task) {
+	public void executeNow(Runnable task, TrackBarrier barrier) {
 		try {
 			execute(task);
 		} catch (InternalException e) {
@@ -171,42 +171,42 @@ public class SharedQueueExecutor extends ThreadPoolExecutor implements TrackExec
 	}
 
 	@Override
-	public Future<?> submit(TrackBarrier barrier, Runnable task) {
+	public Future<?> submit(Runnable task, TrackBarrier barrier) {
 		if (task == null) {
 			throw new NullPointerException();
 		}
 		RunnableFuture<Void> future = newTaskFor(task, null);
-		execute(barrier, future);
+		execute(future, barrier);
 		return future;
 	}
 
 	@Override
-	public Future<?> submitNow(TrackBarrier barrier, Runnable task) {
+	public Future<?> submitNow(Runnable task, TrackBarrier barrier) {
 		if (task == null) {
 			throw new NullPointerException();
 		}
 		RunnableFuture<Void> future = newTaskFor(task, null);
-		executeNow(barrier, future);
+		executeNow(future, barrier);
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submit(TrackBarrier barrier, Callable<T> task) {
+	public <T> Future<T> submit(Callable<T> task, TrackBarrier barrier) {
 		if (task == null) {
 			throw new NullPointerException();
 		}
 		RunnableFuture<T> future = newTaskFor(task);
-		execute(barrier, future);
+		execute(future, barrier);
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submitNow(TrackBarrier barrier, Callable<T> task) {
+	public <T> Future<T> submitNow(Callable<T> task, TrackBarrier barrier) {
 		if (task == null) {
 			throw new NullPointerException();
 		}
 		RunnableFuture<T> future = newTaskFor(task);
-		executeNow(barrier, future);
+		executeNow(future, barrier);
 		return future;
 	}
 

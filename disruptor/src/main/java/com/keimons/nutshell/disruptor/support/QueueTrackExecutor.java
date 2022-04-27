@@ -33,46 +33,46 @@ public class QueueTrackExecutor extends AbstractTrackExecutor {
 	}
 
 	@Override
-	public void execute(TrackBarrier barrier, Runnable task) {
+	public void execute(Runnable task, Object fence) {
+		if (!running) {
+			rejectedHandler.rejectedExecution(fence, task, this);
+		}
+		executors[fence.hashCode() % nThreads].execute(task, fence);
+	}
+
+	@Override
+	public void executeNow(Runnable task, TrackBarrier barrier) {
 		if (!running) {
 			rejectedHandler.rejectedExecution(barrier, task, this);
 		}
-		executors[barrier.hashes()[0] % nThreads].execute(barrier, task);
+		executors[barrier.hashes()[0] % nThreads].executeNow(task, barrier);
 	}
 
 	@Override
-	public void executeNow(TrackBarrier barrier, Runnable task) {
-		if (!running) {
-			rejectedHandler.rejectedExecution(barrier, task, this);
-		}
-		executors[barrier.hashes()[0] % nThreads].executeNow(barrier, task);
-	}
-
-	@Override
-	public Future<?> submit(TrackBarrier barrier, Runnable task) {
+	public Future<?> submit(Runnable task, TrackBarrier barrier) {
 		RunnableFuture<Void> future = new FutureTask<>(task, null);
-		execute(barrier, future);
+		execute(future, barrier);
 		return future;
 	}
 
 	@Override
-	public Future<?> submitNow(TrackBarrier barrier, Runnable task) {
+	public Future<?> submitNow(Runnable task, TrackBarrier barrier) {
 		RunnableFuture<Void> future = new FutureTask<>(task, null);
-		executeNow(barrier, future);
+		executeNow(future, barrier);
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submit(TrackBarrier barrier, Callable<T> task) {
+	public <T> Future<T> submit(Callable<T> task, TrackBarrier barrier) {
 		FutureTask<T> future = new FutureTask<>(task);
-		execute(barrier, future);
+		execute(future, barrier);
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submitNow(TrackBarrier barrier, Callable<T> task) {
+	public <T> Future<T> submitNow(Callable<T> task, TrackBarrier barrier) {
 		FutureTask<T> future = new FutureTask<>(task);
-		executeNow(barrier, future);
+		executeNow(future, barrier);
 		return future;
 	}
 
@@ -122,35 +122,35 @@ public class QueueTrackExecutor extends AbstractTrackExecutor {
 		/**
 		 * 增加一个任务
 		 *
-		 * @param barrier 执行屏障
-		 * @param task    队尾
+		 * @param task  队尾
+		 * @param fence 执行屏障
 		 */
-		public void execute(TrackBarrier barrier, Runnable task) {
+		public void execute(Runnable task, Object fence) {
 			if (!offerLast(task)) {
-				reject(barrier, task, true);
+				reject(true, task, fence);
 			}
 		}
 
 		/**
 		 * 增加一个任务
 		 *
-		 * @param barrier 执行屏障
-		 * @param task    队尾
+		 * @param task  队尾
+		 * @param fence 执行屏障
 		 */
-		public void executeNow(TrackBarrier barrier, Runnable task) {
+		public void executeNow(Runnable task, Object fence) {
 			if (!offerFirst(task)) {
-				reject(barrier, task, false);
+				reject(false, task, fence);
 			}
 		}
 
 		/**
 		 * 拒绝一个任务
 		 *
-		 * @param barrier 执行屏障
-		 * @param task    任务
-		 * @param last    是否队尾
+		 * @param last  是否队尾
+		 * @param task  任务
+		 * @param fence 执行屏障
 		 */
-		protected void reject(TrackBarrier barrier, Runnable task, boolean last) {
+		protected void reject(boolean last, Runnable task, Object fence) {
 			// 检测线程池是否已经关闭，如果线程池关闭，则直接调用拒绝策略
 			// 是否阻塞提交者并等待空余位置，如果是，那么阻塞提交者
 			if (running && blockingCaller) {
@@ -162,7 +162,7 @@ public class QueueTrackExecutor extends AbstractTrackExecutor {
 							notFull.await();
 							// 线程被唤醒后，先检查线程池是否关闭，线程池关闭时，也会唤醒所有等待中的线程
 							if (!running) {
-								rejectedHandler.rejectedExecution(barrier, task, QueueTrackExecutor.this);
+								rejectedHandler.rejectedExecution(fence, task, QueueTrackExecutor.this);
 								return;
 							}
 						}
@@ -174,7 +174,7 @@ public class QueueTrackExecutor extends AbstractTrackExecutor {
 					Thread.currentThread().interrupt();
 				}
 			} else {
-				rejectedHandler.rejectedExecution(barrier, task, QueueTrackExecutor.this);
+				rejectedHandler.rejectedExecution(fence, task, QueueTrackExecutor.this);
 			}
 		}
 
@@ -339,7 +339,7 @@ public class QueueTrackExecutor extends AbstractTrackExecutor {
 		}
 
 		@Override
-		public void execute(TrackBarrier barrier, Runnable task) {
+		public void execute(Runnable task, Object fence) {
 			lock.lock();
 			try {
 				for (; ; ) {

@@ -1,7 +1,6 @@
 package com.keimons.nutshell.disruptor.support;
 
 import com.keimons.nutshell.disruptor.RejectedTrackExecutionHandler;
-import com.keimons.nutshell.disruptor.TrackBarrier;
 import com.keimons.nutshell.disruptor.TrackExecutor;
 
 /**
@@ -16,7 +15,7 @@ import com.keimons.nutshell.disruptor.TrackExecutor;
 public class LocalPolicy implements RejectedTrackExecutionHandler {
 
 	@Override
-	public void rejectedExecution(TrackBarrier barrier, Runnable task, TrackExecutor executor) {
+	public void rejectedExecution(Object fence, Runnable task, TrackExecutor executor) {
 		task.run();
 	}
 }

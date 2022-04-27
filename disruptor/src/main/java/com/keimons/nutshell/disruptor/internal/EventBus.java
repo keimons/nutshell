@@ -1,6 +1,6 @@
-package com.keimons.nutshell.disruptor;
+package com.keimons.nutshell.disruptor.internal;
 
-import com.keimons.nutshell.disruptor.support.event.EventBus;
+import com.keimons.nutshell.disruptor.TrackBarrier;
 
 /**
  * 轨道缓冲区
@@ -61,19 +61,27 @@ import com.keimons.nutshell.disruptor.support.event.EventBus;
  * @version 1.0
  * @since 11
  **/
-public interface TrackBuffer {
+public interface EventBus<T> {
 
 	long getWriterIndex();
 
 	/**
-	 * 发布一个事件
+	 * 借用事件对象
+	 * <p>
+	 * 如果要在{@link EventBus}中发布事件，需要先拿到事件对象，然后再发布事件。
 	 *
-	 * @param barrier 执行屏障
-	 * @param event   任务
+	 * @return 事件对象
 	 */
-	void publish(TrackBarrier barrier, Runnable event);
+	T borrowEvent();
 
-	EventBus.Node get(long index);
+	void publishEvent(T event);
 
-	void remove(long index);
+	T getEvent(long index);
+
+	/**
+	 * 归还事件对象
+	 *
+	 * @param index 对象位置
+	 */
+	void returnEvent(long index);
 }
