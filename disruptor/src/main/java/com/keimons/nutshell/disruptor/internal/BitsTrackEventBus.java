@@ -1,5 +1,6 @@
 package com.keimons.nutshell.disruptor.internal;
 
+import com.keimons.nutshell.disruptor.Debug;
 import jdk.internal.vm.annotation.Contended;
 
 import java.lang.invoke.MethodHandles;
@@ -15,12 +16,24 @@ import java.lang.invoke.VarHandle;
 public class BitsTrackEventBus<T> implements EventBus<T> {
 
 	private static final VarHandle AA = MethodHandles.arrayElementVarHandle(Object[].class);
-	final int mark;
+
+	final EventFactory<T> factory;
+
+	final int _mark;
+
 	/**
 	 * 缓存系统
 	 */
-	@Contended
 	final T[] _buffer;
+
+	@Contended
+	volatile long _readerIndex;
+
+	@Contended
+	volatile long _writerIndex;
+
+	final int mark;
+
 	/**
 	 * 缓冲区
 	 * <p>
@@ -33,23 +46,25 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 	 */
 	@Contended
 	final T[] buffer;
+
 	private final int capacity;
-	@Contended
-	volatile long readerIndex;
+
 	@Contended
 	volatile long writerIndex;
 
 	@SuppressWarnings("unchecked")
 	public BitsTrackEventBus(EventFactory<T> factory, int capacity) {
+		this.factory = factory;
 		this.capacity = capacity;
 		this.mark = capacity - 1;
-		this._buffer = (T[]) new Object[capacity * 2];
+		this._mark = (capacity << 1) - 1;
+		this._buffer = (T[]) new Object[capacity << 1];
 		this.buffer = (T[]) new Object[capacity];
-		fill(factory);
+		fill();
 	}
 
-	private void fill(EventFactory<T> factory) {
-		for (int i = 0, length = capacity * 2; i < length; i++) {
+	private void fill() {
+		for (int i = 0, length = capacity << 1; i < length; i++) {
 			_buffer[i] = factory.newInstance();
 		}
 	}
@@ -57,18 +72,23 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 	@Override
 	public T borrowEvent() {
 		for (; ; ) {
-			long readerIndex = this.readerIndex;
-			int offset = (int) (readerIndex & mark);
+			long readerIndex = this._readerIndex;
+			int offset = (int) (readerIndex & _mark);
 			T event = _buffer[offset];
 			if (AA.compareAndSet(_buffer, offset, event, null)) {
-				this.readerIndex = readerIndex + 1;
+				if (event == null) {
+					// 缓冲区中没有消息了
+					Debug.warn("队列已空");
+					return factory.newInstance();
+				}
+				this._readerIndex = readerIndex + 1;
 				return event;
 			}
 		}
 	}
 
 	@Override
-	public long getWriterIndex() {
+	public long writerIndex() {
 		return writerIndex;
 	}
 
@@ -87,14 +107,30 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 	}
 
 	@Override
+	public void finishEvent(long index) {
+		int offset = (int) (index & mark);
+		buffer[offset] = null;
+	}
+
+	@Override
 	public T getEvent(long index) {
 		int offset = (int) (index & mark);
 		return buffer[offset];
 	}
 
 	@Override
-	public void returnEvent(long index) {
-		int offset = (int) (index & mark);
-		buffer[offset] = null;
+	public void returnEvent(T event) {
+		for (; ; ) {
+			long writerIndex = this._writerIndex;
+			if (writerIndex >= this._readerIndex) {
+				Debug.warn("队列已满");
+				return;
+			}
+			int offset = (int) (writerIndex & _mark);
+			if (AA.compareAndSet(_buffer, offset, null, event)) {
+				this._writerIndex = writerIndex + 1;
+				return;
+			}
+		}
 	}
 }

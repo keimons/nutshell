@@ -51,7 +51,7 @@ package com.keimons.nutshell.disruptor;
  * @version 1.0
  * @since 11
  */
-public interface TrackBarrier {
+public interface TrackBarrier extends Interceptor {
 
 	/**
 	 * 使用一个栅栏初始化轨道屏障
@@ -83,13 +83,6 @@ public interface TrackBarrier {
 	 * @param fences 栅栏
 	 */
 	void init(Object... fences);
-
-	/**
-	 * 获取截取量
-	 *
-	 * @return 截取量
-	 */
-	int intercept();
 
 	/**
 	 * 获取所有hash目标值

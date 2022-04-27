@@ -84,9 +84,9 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 	 */
 	private final ReorderedTrackWorker[] executors;
 
-	public ReorderedTrackExecutor(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler) {
+	public ReorderedTrackExecutor(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler) {
 		super(name, nThreads, rejectedHandler);
-		eventBus = new BitsTrackEventBus<>(Node::new, 1024);
+		eventBus = new BitsTrackEventBus<>(Node::new, capacity);
 		executors = new ReorderedTrackWorker[nThreads];
 		for (int i = 0; i < nThreads; i++) {
 			ReorderedTrackWorker executor = new ReorderedTrackWorker(i, threadFactory);
@@ -293,38 +293,38 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 
 		protected Node next() throws InterruptedException {
 			while (true) {
-				barriers.removeIf(node -> !node.interceptor.isIntercepted());
+				barriers.removeIf(node -> !node.barrier.isIntercepted());
 				for (int i = 0; i < intercepted.size(); i++) {
 					Node node = intercepted.get(i);
 					if (barriers.stream().allMatch(barrier -> node.barrier.reorder(track, barrier.barrier))) {
-						if (node.interceptor.tryIntercept()) {
-							Debug.info("Work-" + track + " 恢复屏障：" + node.task.toString());
+						if (node.barrier.tryIntercept()) {
+							Debug.info("Work-" + track + " 恢复屏障：" + node.task);
 							barriers.add(node);
 						} else {
 							intercepted.remove(i);
-							Debug.info("Work-" + track + " 恢复任务：" + node.task.toString());
+							Debug.info("Work-" + track + " 恢复任务：" + node.task);
 							return node;
 						}
 					}
 				}
-				if (readerIndex < eventBus.getWriterIndex()) {
+				if (readerIndex < eventBus.writerIndex()) {
 					long readerIndex = this.readerIndex;
 					Node node = eventBus.getEvent(readerIndex);
 					this.readerIndex = readerIndex + 1;
 					if (node.barrier.isTrack(1L << track)) {
 						if (barriers.stream().allMatch(barrier -> node.barrier.reorder(track, barrier.barrier))) {
-							if (node.interceptor.tryIntercept()) {
-								Debug.info("Work-" + track + " 增加屏障：" + node.task.toString());
+							if (node.barrier.tryIntercept()) {
+								Debug.info("Work-" + track + " 增加屏障：" + node.task);
 								// only execute thread return event
 								barriers.add(node);
 							} else {
-								Debug.info("Work-" + track + " 执行任务：" + node.task.toString());
-								eventBus.returnEvent(readerIndex);
+								Debug.info("Work-" + track + " 执行任务：" + node.task);
+								eventBus.finishEvent(readerIndex);
 								return node;
 							}
 						} else {
-							Debug.info("Work-" + track + " 缓存任务：" + node.task.toString());
-							eventBus.returnEvent(readerIndex);
+							Debug.info("Work-" + track + " 缓存任务：" + node.task);
+							eventBus.finishEvent(readerIndex);
 							intercepted.add(node);
 						}
 					}
@@ -353,16 +353,18 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 			while (running) {
 				try {
 					while (running) {
-						Node runnable = null;
+						Node event = null;
 						try {
-							runnable = next();
+							event = next();
 							beforeExecute();
-							runnable.task.run();
+							event.task.run();
 						} catch (Throwable e) {
 							// ignore
 						} finally {
-							if (runnable != null) {
-								runnable.release();
+							if (event != null) {
+								event.release();
+								eventBus.returnEvent(event);
+								Debug.info("Work-" + track + " 释放任务：" + event.task);
 							}
 						}
 					}
@@ -382,37 +384,35 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 
 		public Runnable task;
 
-		public Interceptor interceptor = new ReorderedInterceptor();
-
-		public TrackBarrier barrier = new BitsTrackBarrier(nThreads);
+		/**
+		 * 轨道屏障
+		 * <p>
+		 * 用于处理一个轨道中的所有屏障。
+		 */
+		public final TrackBarrier barrier = new BitsTrackBarrier(nThreads);
 
 		public void init(Runnable task, Object fence) {
 			this.task = task;
 			this.barrier.init(fence);
-			this.interceptor.init(barrier.intercept());
 		}
 
 		public void init(Runnable task, Object fence0, Object fence1) {
 			this.task = task;
 			this.barrier.init(fence0, fence1);
-			this.interceptor.init(barrier.intercept());
 		}
 
 		public void init(Runnable task, Object fence0, Object fence1, Object fence2) {
 			this.task = task;
 			this.barrier.init(fence0, fence1, fence2);
-			this.interceptor.init(barrier.intercept());
 		}
 
 		public void init(Runnable task, Object... fences) {
 			this.task = task;
 			this.barrier.init(fences);
-			this.interceptor.init(barrier.intercept());
 		}
 
 		public void release() {
 			task = null;
-			interceptor.release();
 			barrier.release();
 		}
 	}

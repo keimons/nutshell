@@ -9,7 +9,21 @@ package com.keimons.nutshell.disruptor;
  **/
 public class Debug {
 
+	/**
+	 * 信息
+	 *
+	 * @param msg 信息内容
+	 */
 	public static void info(String msg) {
+		System.out.println(msg);
+	}
+
+	/**
+	 * 警告
+	 *
+	 * @param msg 警告内容
+	 */
+	public static void warn(String msg) {
 		System.out.println(msg);
 	}
 }
