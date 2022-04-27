@@ -1,4 +1,4 @@
-package com.keimons.nutshell.disruptor.support;
+package com.keimons.nutshell.disruptor.internal;
 
 import com.keimons.nutshell.disruptor.TrackBarrier;
 
@@ -11,7 +11,7 @@ import com.keimons.nutshell.disruptor.TrackBarrier;
  * @version 1.0
  * @since 11
  */
-public class BitTrackBarrier implements TrackBarrier {
+public class BitsTrackBarrier implements TrackBarrier {
 
 	/**
 	 * 轨道数量（最大不超过64）
@@ -39,7 +39,7 @@ public class BitTrackBarrier implements TrackBarrier {
 	 */
 	private long bits;
 
-	public BitTrackBarrier(int nTracks) {
+	public BitsTrackBarrier(int nTracks) {
 		if (nTracks > 64) {
 			throw new IllegalArgumentException("nTracks must not more than 64");
 		}
@@ -116,10 +116,10 @@ public class BitTrackBarrier implements TrackBarrier {
 
 	@Override
 	public boolean reorder(int track, TrackBarrier barrier) {
-		if (!(barrier instanceof BitTrackBarrier)) {
+		if (!(barrier instanceof BitsTrackBarrier)) {
 			throw new IllegalStateException("unknown state: " + barrier.getClass());
 		}
-		BitTrackBarrier other = (BitTrackBarrier) barrier;
+		BitsTrackBarrier other = (BitsTrackBarrier) barrier;
 		if ((bits & other.bits) == 0) {
 			throw new IllegalStateException("unknown state: " + barrier.getClass());
 		}

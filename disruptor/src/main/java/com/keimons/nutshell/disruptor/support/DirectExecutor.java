@@ -33,37 +33,37 @@ public class DirectExecutor extends AbstractTrackExecutor {
 	}
 
 	@Override
-	public void execute(TrackBarrier barrier, Runnable task) {
+	public void execute(Runnable task, Object fence) {
 		task.run();
 	}
 
 	@Override
-	public void executeNow(TrackBarrier barrier, Runnable task) {
+	public void executeNow(Runnable task, TrackBarrier barrier) {
 		task.run();
 	}
 
 	@Override
-	public Future<?> submit(TrackBarrier barrier, Runnable task) {
+	public Future<?> submit(Runnable task, TrackBarrier barrier) {
 		RunnableFuture<?> future = new FutureTask<>(task, null);
 		future.run();
 		return future;
 	}
 
 	@Override
-	public Future<?> submitNow(TrackBarrier barrier, Runnable task) {
-		return submit(barrier, task);
+	public Future<?> submitNow(Runnable task, TrackBarrier barrier) {
+		return submit(task, barrier);
 	}
 
 	@Override
-	public <T> Future<T> submit(TrackBarrier barrier, Callable<T> task) {
+	public <T> Future<T> submit(Callable<T> task, TrackBarrier barrier) {
 		FutureTask<T> future = new FutureTask<>(task);
 		future.run();
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submitNow(TrackBarrier barrier, Callable<T> task) {
-		return submit(barrier, task);
+	public <T> Future<T> submitNow(Callable<T> task, TrackBarrier barrier) {
+		return submit(task, barrier);
 	}
 
 	@Override

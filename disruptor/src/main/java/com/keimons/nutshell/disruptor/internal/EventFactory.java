@@ -1,4 +1,4 @@
-package com.keimons.nutshell.disruptor;
+package com.keimons.nutshell.disruptor.internal;
 
 /**
  * 事件工厂
@@ -7,7 +7,7 @@ package com.keimons.nutshell.disruptor;
  * @version 1.0
  * @since 11
  **/
-public interface EventFactory<E extends Event> {
+public interface EventFactory<E> {
 
 	E newInstance();
 }

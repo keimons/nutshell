@@ -73,7 +73,7 @@ public class ExecutorManager {
 	 * @param task          等待执行的任务
 	 */
 	public static void executeTask(int executorIndex, TrackBarrier barrier, Runnable task) {
-		strategies[executorIndex].execute(barrier, task);
+		strategies[executorIndex].execute(task, barrier);
 	}
 
 	/**

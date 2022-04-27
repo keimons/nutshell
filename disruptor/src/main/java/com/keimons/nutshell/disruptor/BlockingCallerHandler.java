@@ -18,11 +18,11 @@ public interface BlockingCallerHandler extends RejectedTrackExecutionHandler {
 	 * <ul>
 	 *     <li>线程池已关闭</li>
 	 * </ul>
+	 *  @param fence  执行屏障
 	 *
-	 * @param barrier  执行屏障
 	 * @param task     执行的任务
 	 * @param executor 执行线程
 	 */
 	@Override
-	void rejectedExecution(TrackBarrier barrier, Runnable task, TrackExecutor executor);
+	void rejectedExecution(Object fence, Runnable task, TrackExecutor executor);
 }

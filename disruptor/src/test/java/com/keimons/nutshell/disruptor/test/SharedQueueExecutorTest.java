@@ -2,7 +2,7 @@ package com.keimons.nutshell.disruptor.test;
 
 import com.keimons.nutshell.disruptor.TrackBarrier;
 import com.keimons.nutshell.disruptor.TrackExecutor;
-import com.keimons.nutshell.disruptor.support.BitTrackBarrier;
+import com.keimons.nutshell.disruptor.internal.BitsTrackBarrier;
 import com.keimons.nutshell.disruptor.support.BlockPolicy;
 import com.keimons.nutshell.disruptor.support.SharedQueueExecutor;
 import org.junit.jupiter.api.Test;
@@ -20,16 +20,16 @@ public class SharedQueueExecutorTest {
 	public void test() throws InterruptedException {
 		TrackExecutor executor = new SharedQueueExecutor("SharedExecutor", 4, new BlockPolicy());
 		for (int i = 0; i < 16; i++) {
-			TrackBarrier barrier = new BitTrackBarrier(16);
+			TrackBarrier barrier = new BitsTrackBarrier(16);
 			barrier.init(0);
-			executor.execute(barrier, () -> {
+			executor.execute(() -> {
 				try {
 					Thread.sleep(5000);
 					System.out.println("execute long");
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-			});
+			}, barrier);
 		}
 		Thread.sleep(2000);
 		for (int i = 0; i < 16; i++) {
@@ -37,15 +37,15 @@ public class SharedQueueExecutorTest {
 			Thread thread = new Thread(() -> {
 				System.out.println("thread-" + value + " start");
 
-				TrackBarrier barrier = new BitTrackBarrier(16);
+				TrackBarrier barrier = new BitsTrackBarrier(16);
 				barrier.init(0);
-				executor.execute(barrier, () -> {
+				executor.execute(() -> {
 					try {
 						Thread.sleep(5000);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-				});
+				}, barrier);
 				System.out.println("thread-" + value + " finish");
 			});
 			thread.start();
