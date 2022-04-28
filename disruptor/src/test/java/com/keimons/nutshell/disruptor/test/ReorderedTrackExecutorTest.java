@@ -15,7 +15,7 @@ public class ReorderedTrackExecutorTest {
 
 	@Test
 	public void test() throws InterruptedException {
-		ReorderedTrackExecutor executor = new ReorderedTrackExecutor("ReorderedTrack", 4, 1024, new AbortPolicy());
+		ReorderedTrackExecutor executor = new ReorderedTrackExecutor("ReorderedTrack", 1, 1024, new AbortPolicy());
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {

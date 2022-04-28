@@ -104,6 +104,10 @@ public interface TrackBarrier extends Interceptor {
 	 */
 	boolean reorder(int track, TrackBarrier barrier);
 
+	boolean isTrack(int track);
+
+	boolean isSingle(int track);
+
 	/**
 	 * 释放屏障
 	 */

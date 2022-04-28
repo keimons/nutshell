@@ -19,20 +19,11 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 
 	final EventFactory<T> factory;
 
-	final int _mark;
+	final int capacity;
 
-	/**
-	 * 缓存系统
-	 */
-	final T[] _buffer;
+	final int writerMark;
 
-	@Contended
-	volatile long _readerIndex;
-
-	@Contended
-	volatile long _writerIndex;
-
-	final int mark;
+	final int readerMark;
 
 	/**
 	 * 缓冲区
@@ -47,17 +38,27 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 	@Contended
 	final T[] buffer;
 
-	private final int capacity;
-
 	@Contended
 	volatile long writerIndex;
+
+	/**
+	 * 缓存系统
+	 */
+	@Contended
+	final T[] _buffer;
+
+	@Contended
+	volatile long _readerIndex;
+
+	@Contended
+	volatile long _writerIndex;
 
 	@SuppressWarnings("unchecked")
 	public BitsTrackEventBus(EventFactory<T> factory, int capacity) {
 		this.factory = factory;
 		this.capacity = capacity;
-		this.mark = capacity - 1;
-		this._mark = (capacity << 1) - 1;
+		this.writerMark = capacity - 1;
+		this.readerMark = (capacity << 1) - 1;
 		this._buffer = (T[]) new Object[capacity << 1];
 		this.buffer = (T[]) new Object[capacity];
 		fill();
@@ -73,7 +74,7 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 	public T borrowEvent() {
 		for (; ; ) {
 			long readerIndex = this._readerIndex;
-			int offset = (int) (readerIndex & _mark);
+			int offset = (int) (readerIndex & readerMark);
 			T event = _buffer[offset];
 			if (AA.compareAndSet(_buffer, offset, event, null)) {
 				if (event == null) {
@@ -96,7 +97,7 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 	public void publishEvent(T event) {
 		while (true) {
 			long index = this.writerIndex;
-			int offset = (int) (index & mark);
+			int offset = (int) (index & writerMark);
 			if (AA.compareAndSet(buffer, offset, null, event)) {
 				this.writerIndex = index + 1;
 				return;
@@ -108,13 +109,13 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 
 	@Override
 	public void finishEvent(long index) {
-		int offset = (int) (index & mark);
+		int offset = (int) (index & writerMark);
 		buffer[offset] = null;
 	}
 
 	@Override
 	public T getEvent(long index) {
-		int offset = (int) (index & mark);
+		int offset = (int) (index & writerMark);
 		return buffer[offset];
 	}
 
@@ -126,7 +127,7 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 				Debug.warn("队列已满");
 				return;
 			}
-			int offset = (int) (writerIndex & _mark);
+			int offset = (int) (writerIndex & readerMark);
 			if (AA.compareAndSet(_buffer, offset, null, event)) {
 				this._writerIndex = writerIndex + 1;
 				return;

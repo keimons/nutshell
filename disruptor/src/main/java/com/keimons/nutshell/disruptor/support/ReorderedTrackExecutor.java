@@ -4,11 +4,13 @@ import com.keimons.nutshell.disruptor.*;
 import com.keimons.nutshell.disruptor.internal.BitsTrackBarrier;
 import com.keimons.nutshell.disruptor.internal.BitsTrackEventBus;
 import com.keimons.nutshell.disruptor.internal.EventBus;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -77,7 +79,7 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 	 * <p>
 	 * 所有任务都发布在事件总线上，如果事件总线不能发布任务，任务发布失败，则队列已满。
 	 */
-	private final EventBus<Node> eventBus;
+	private final EventBus<Event> eventBus;
 
 	/**
 	 * 任务执行器
@@ -86,7 +88,7 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 
 	public ReorderedTrackExecutor(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler) {
 		super(name, nThreads, rejectedHandler);
-		eventBus = new BitsTrackEventBus<>(Node::new, capacity);
+		eventBus = new BitsTrackEventBus<>(Event::new, capacity);
 		executors = new ReorderedTrackWorker[nThreads];
 		for (int i = 0; i < nThreads; i++) {
 			ReorderedTrackWorker executor = new ReorderedTrackWorker(i, threadFactory);
@@ -97,25 +99,40 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 
 	@Override
 	public void execute(Runnable task, Object fence) {
-		Node event = eventBus.borrowEvent();
+		Event event = eventBus.borrowEvent();
 		event.init(task, fence);
 		eventBus.publishEvent(event);
+		weakUp(event);
+	}
+
+	public void weakUp(Event event) {
+		for (int i = 0; i < nThreads; i++) {
+			if (event.barrier.isTrack(i)) {
+				LockSupport.unpark(executors[i].thread);
+			}
+		}
+	}
+
+	public void weakUp(Event event, int track) {
+		if (!event.barrier.isSingle(track)) {
+			weakUp(event);
+		}
 	}
 
 	public void execute(Runnable task, Object fence0, Object fence1) {
-		Node event = eventBus.borrowEvent();
+		Event event = eventBus.borrowEvent();
 		event.init(task, fence0, fence1);
 		eventBus.publishEvent(event);
 	}
 
 	public void execute(Runnable task, Object fence0, Object fence1, Object fence2) {
-		Node event = eventBus.borrowEvent();
+		Event event = eventBus.borrowEvent();
 		event.init(task, fence0, fence1, fence2);
 		eventBus.publishEvent(event);
 	}
 
 	public void execute(Runnable task, Object... fences) {
-		Node event = eventBus.borrowEvent();
+		Event event = eventBus.borrowEvent();
 		event.init(task, fences);
 		eventBus.publishEvent(event);
 	}
@@ -211,26 +228,31 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 		protected final Thread thread;
 
 		protected final int track;
+
 		/**
 		 * 主锁
 		 */
 		protected final ReentrantLock lock = new ReentrantLock();
+
 		/**
 		 * 等待条件
 		 */
-		protected final Condition notFull = lock.newCondition();
+		protected final Condition signal = lock.newCondition();
+
 		/**
 		 * 拦截队列
 		 * <p>
 		 * 当前线程中被屏障拦截的事件，直接缓存在执行器本地，等待拦截器释放后，再执行缓存的消息。
 		 */
-		final List<Node> intercepted = new ArrayList<>();
+		final List<Event> intercepted = new ArrayList<>();
+
 		/**
 		 * 执行屏障
 		 * <p>
 		 * 事件总线上的事件，即使是由当前线程执行，也并不一定可以立即处理。
 		 */
-		final List<Node> barriers = new ArrayList<>();
+		final List<Event> barriers = new ArrayList<>();
+
 		protected long readerIndex;
 
 		/**
@@ -259,7 +281,7 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 					lock.lockInterruptibly();
 					try {
 						while (last ? !offerLast(task) : !offerFirst(task)) {
-							notFull.await();
+							signal.await();
 							// 线程被唤醒后，先检查线程池是否关闭，线程池关闭时，也会唤醒所有等待中的线程
 							if (!running) {
 								rejectedHandler.rejectedExecution(barrier, task, ReorderedTrackExecutor.this);
@@ -278,58 +300,46 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 			}
 		}
 
-		protected void beforeExecute() {
-			try {
-				lock.lockInterruptibly();
-				try {
-					notFull.signal();
-				} finally {
-					lock.unlock();
-				}
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-		}
-
-		protected Node next() throws InterruptedException {
+		protected @Nullable Event next() throws InterruptedException {
 			while (true) {
-				barriers.removeIf(node -> !node.barrier.isIntercepted());
+				barriers.removeIf(event -> !event.barrier.isIntercepted());
 				for (int i = 0; i < intercepted.size(); i++) {
-					Node node = intercepted.get(i);
-					if (barriers.stream().allMatch(barrier -> node.barrier.reorder(track, barrier.barrier))) {
-						if (node.barrier.tryIntercept()) {
-							Debug.info("Work-" + track + " 恢复屏障：" + node.task);
-							barriers.add(node);
+					Event event = intercepted.get(i);
+					if (barriers.stream().allMatch(barrier -> event.barrier.reorder(track, barrier.barrier))) {
+						if (event.barrier.tryIntercept()) {
+//							Debug.info("Work-" + track + " 恢复屏障：" + event.task);
+							barriers.add(event);
 						} else {
+//							Debug.info("Work-" + track + " 恢复任务：" + event.task);
 							intercepted.remove(i);
-							Debug.info("Work-" + track + " 恢复任务：" + node.task);
-							return node;
+							return event;
 						}
 					}
 				}
+				long readerIndex = this.readerIndex;
 				if (readerIndex < eventBus.writerIndex()) {
-					long readerIndex = this.readerIndex;
-					Node node = eventBus.getEvent(readerIndex);
+					Event event = eventBus.getEvent(readerIndex);
 					this.readerIndex = readerIndex + 1;
-					if (node.barrier.isTrack(1L << track)) {
-						if (barriers.stream().allMatch(barrier -> node.barrier.reorder(track, barrier.barrier))) {
-							if (node.barrier.tryIntercept()) {
-								Debug.info("Work-" + track + " 增加屏障：" + node.task);
+					if (event.barrier.isTrack(1L << track)) {
+						if (barriers.stream().allMatch(barrier -> event.barrier.reorder(track, barrier.barrier))) {
+							if (event.barrier.tryIntercept()) {
 								// only execute thread return event
-								barriers.add(node);
+//								Debug.info("Work-" + track + " 增加屏障：" + event.task);
+								barriers.add(event);
 							} else {
-								Debug.info("Work-" + track + " 执行任务：" + node.task);
+//								Debug.info("Work-" + track + " 执行任务：" + event.task);
 								eventBus.finishEvent(readerIndex);
-								return node;
+								return event;
 							}
 						} else {
-							Debug.info("Work-" + track + " 缓存任务：" + node.task);
+//							Debug.info("Work-" + track + " 缓存任务：" + event.task);
 							eventBus.finishEvent(readerIndex);
-							intercepted.add(node);
+							intercepted.add(event);
 						}
 					}
+				} else {
+					return null;
 				}
-				Thread.yield();
 			}
 		}
 
@@ -339,6 +349,10 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 
 		protected boolean offerLast(Runnable task) {
 			return false;
+		}
+
+		public void signal() {
+			signal.signal();
 		}
 
 		/**
@@ -353,18 +367,20 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 			while (running) {
 				try {
 					while (running) {
-						Node event = null;
+						Event event = null;
 						try {
 							event = next();
-							beforeExecute();
-							event.task.run();
+							if (event == null) {
+								LockSupport.park();
+							} else {
+								event.task.run();
+							}
 						} catch (Throwable e) {
 							// ignore
 						} finally {
 							if (event != null) {
-								event.release();
+								event.release(track);
 								eventBus.returnEvent(event);
-								Debug.info("Work-" + track + " 释放任务：" + event.task);
 							}
 						}
 					}
@@ -380,7 +396,7 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 		}
 	}
 
-	public class Node {
+	public class Event {
 
 		public Runnable task;
 
@@ -411,8 +427,10 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 			this.barrier.init(fences);
 		}
 
-		public void release() {
+		public void release(int track) {
 			task = null;
+			barrier.setIntercepted(false);
+			weakUp(this, track);
 			barrier.release();
 		}
 	}
