@@ -24,6 +24,6 @@ public class Debug {
 	 * @param msg 警告内容
 	 */
 	public static void warn(String msg) {
-		System.out.println(msg);
+//		System.out.println(msg);
 	}
 }

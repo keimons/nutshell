@@ -78,6 +78,10 @@ public interface Interceptor {
 	 */
 	boolean tryIntercept();
 
+	default void setIntercepted(boolean intercepted) {
+
+	}
+
 	/**
 	 * 是否正在被拦截
 	 *

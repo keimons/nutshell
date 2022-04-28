@@ -1,8 +1,10 @@
 package com.keimons.nutshell.disruptor.internal;
 
-import com.keimons.nutshell.disruptor.Debug;
 import com.keimons.nutshell.disruptor.TrackBarrier;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -22,6 +24,8 @@ public class BitsTrackBarrier implements TrackBarrier {
 	 * 它就像操场上的跑道，共有{@code nTracks}条轨道，每个线程仅仅跑在自己的轨道上。
 	 */
 	private final int nTracks;
+
+	private final List<Object> fes;
 
 	/**
 	 * 轨道中key的数量
@@ -53,25 +57,25 @@ public class BitsTrackBarrier implements TrackBarrier {
 		this.fences = new Object[nTracks][4];
 		this.tracks = new int[nTracks];
 		this.nTracks = nTracks;
+		this.fes = new ArrayList<>();
 	}
 
 	private void init0(Object fence) {
-		if (fence == null) {
-			throw new NullPointerException();
-		}
 		int hashcode = fence.hashCode();
 		int track = hashcode % nTracks;
 		bits |= (1L << track);
-		Object[] fences = this.fences[track];
-		int index = this.tracks[track];
-		if (index >= fences.length) {
-			Object[] tmp = new Object[index << 1];
-			System.arraycopy(fences, 0, tmp, 0, index);
-			fences = tmp;
-			this.fences[track] = fences;
-		}
-		fences[index] = fence;
-		this.tracks[track] = index + 1;
+		fes.add(fence);
+
+//		Object[] fences = this.fences[track];
+//		int index = this.tracks[track];
+//		if (index >= fences.length) {
+//			Object[] tmp = new Object[index << 1];
+//			System.arraycopy(fences, 0, tmp, 0, index);
+//			fences = tmp;
+//			this.fences[track] = fences;
+//		}
+//		fences[index] = fence;
+//		this.tracks[track] = index + 1;
 	}
 
 	@Override
@@ -123,8 +127,12 @@ public class BitsTrackBarrier implements TrackBarrier {
 
 	@Override
 	public boolean tryIntercept() {
-		Debug.info(toString() + ": " + forbids.get());
 		return forbids.getAndDecrement() > 0;
+	}
+
+	@Override
+	public void setIntercepted(boolean intercepted) {
+		this.intercepted = intercepted;
 	}
 
 	@Override
@@ -158,33 +166,44 @@ public class BitsTrackBarrier implements TrackBarrier {
 		if ((bits & other.bits) == 0) {
 			throw new IllegalStateException("unknown state: " + barrier.getClass());
 		}
-		Object[] keys0 = this.fences[track];
-		Object[] keys1 = other.fences[track];
-		int index0 = this.tracks[track];
-		int index1 = other.tracks[track];
-		for (int i = 0; i < index0; i++) {
-			Object k = keys0[i];
-			for (int j = 0; j < index1; j++) {
-				if (k.equals(keys1[j])) {
-					return false;
-				}
-			}
-		}
-		return true;
+		return !fes.contains(track);
+//		Object[] keys0 = this.fences[track];
+//		Object[] keys1 = other.fences[track];
+//		int index0 = this.tracks[track];
+//		int index1 = other.tracks[track];
+//		for (int i = 0; i < index0; i++) {
+//			Object k = keys0[i];
+//			for (int j = 0; j < index1; j++) {
+//				if (k.equals(keys1[j])) {
+//					return false;
+//				}
+//			}
+//		}
+//		return true;
+	}
+
+	@Override
+	public boolean isTrack(int track) {
+		return (bits & 1L << track) != 0;
+	}
+
+	@Override
+	public boolean isSingle(int track) {
+		return bits == 1L << track;
 	}
 
 	@Override
 	public void release() {
-		for (int i = 0; i < tracks.length; i++) {
-			int index = tracks[i];
-			if (index > 0) {
-				tracks[i] = 0;
-				for (int j = 0; j < index; j++) {
-					fences[i][j] = null;
-				}
-			}
-		}
+//		for (int i = 0; i < tracks.length; i++) {
+//			int index = tracks[i];
+//			if (index > 0) {
+//				tracks[i] = 0;
+//				for (int j = 0; j < index; j++) {
+//					fences[i][j] = null;
+//				}
+//			}
+//		}
+		this.fes.clear();
 		this.bits = 0L;
-		this.intercepted = false;
 	}
 }
