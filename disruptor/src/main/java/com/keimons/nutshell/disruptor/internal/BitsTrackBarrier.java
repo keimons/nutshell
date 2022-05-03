@@ -1,6 +1,8 @@
 package com.keimons.nutshell.disruptor.internal;
 
 import com.keimons.nutshell.disruptor.TrackBarrier;
+import jdk.internal.vm.annotation.Contended;
+import jdk.internal.vm.annotation.ForceInline;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,7 +41,8 @@ public class BitsTrackBarrier implements TrackBarrier {
 	 */
 	private final Object[][] fences;
 
-	private final AtomicInteger forbids = new AtomicInteger();
+	@Contended
+	public final AtomicInteger forbids = new AtomicInteger();
 
 	/**
 	 * 任务位置
@@ -48,7 +51,7 @@ public class BitsTrackBarrier implements TrackBarrier {
 	 */
 	private long bits;
 
-	private volatile boolean intercepted;
+	protected volatile boolean intercepted;
 
 	public BitsTrackBarrier(int nTracks) {
 		if (nTracks > 64) {
@@ -126,6 +129,7 @@ public class BitsTrackBarrier implements TrackBarrier {
 	}
 
 	@Override
+	@ForceInline
 	public boolean tryIntercept() {
 		return forbids.getAndDecrement() > 0;
 	}

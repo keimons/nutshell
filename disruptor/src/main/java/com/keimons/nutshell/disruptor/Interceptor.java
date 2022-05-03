@@ -1,5 +1,7 @@
 package com.keimons.nutshell.disruptor;
 
+import jdk.internal.vm.annotation.ForceInline;
+
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.LockSupport;
 
@@ -76,6 +78,7 @@ public interface Interceptor {
 	 *
 	 * @return {@code true}拦截成功，{@code false}拦截失败
 	 */
+	@ForceInline
 	boolean tryIntercept();
 
 	default void setIntercepted(boolean intercepted) {

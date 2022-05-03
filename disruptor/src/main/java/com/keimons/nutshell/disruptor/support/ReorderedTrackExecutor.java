@@ -1,13 +1,14 @@
 package com.keimons.nutshell.disruptor.support;
 
-import com.keimons.nutshell.disruptor.*;
+import com.keimons.nutshell.disruptor.AbstractTrackExecutor;
+import com.keimons.nutshell.disruptor.Debug;
+import com.keimons.nutshell.disruptor.RejectedTrackExecutionHandler;
+import com.keimons.nutshell.disruptor.TrackBarrier;
 import com.keimons.nutshell.disruptor.internal.BitsTrackBarrier;
 import com.keimons.nutshell.disruptor.internal.BitsTrackEventBus;
 import com.keimons.nutshell.disruptor.internal.EventBus;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.LockSupport;
@@ -107,14 +108,14 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 
 	public void weakUp(Event event) {
 		for (int i = 0; i < nThreads; i++) {
-			if (event.barrier.isTrack(i)) {
+			if (event.isTrack(i)) {
 				LockSupport.unpark(executors[i].thread);
 			}
 		}
 	}
 
 	public void weakUp(Event event, int track) {
-		if (!event.barrier.isSingle(track)) {
+		if (!event.isSingle(track)) {
 			weakUp(event);
 		}
 	}
@@ -239,19 +240,23 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 		 */
 		protected final Condition signal = lock.newCondition();
 
+		int interceptIndex;
+
 		/**
 		 * 拦截队列
 		 * <p>
 		 * 当前线程中被屏障拦截的事件，直接缓存在执行器本地，等待拦截器释放后，再执行缓存的消息。
 		 */
-		final List<Event> intercepted = new ArrayList<>();
+		Event[] intercepted = new Event[8];
+
+		int barrierIndex;
 
 		/**
 		 * 执行屏障
 		 * <p>
 		 * 事件总线上的事件，即使是由当前线程执行，也并不一定可以立即处理。
 		 */
-		final List<Event> barriers = new ArrayList<>();
+		Event[] barriers = new Event[8];
 
 		protected long readerIndex;
 
@@ -265,53 +270,67 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 			this.thread = threadFactory.newThread(this);
 		}
 
-		/**
-		 * 拒绝一个任务
-		 *
-		 * @param barrier 执行屏障
-		 * @param task    任务
-		 * @param last    是否队尾
-		 */
-		protected void reject(TrackBarrier barrier, Runnable task, boolean last) {
-			// 检测线程池是否已经关闭，如果线程池关闭，则直接调用拒绝策略
-			// 是否阻塞提交者并等待空余位置，如果是，那么阻塞提交者
-			if (running && blockingCaller) {
-				try {
-					// 检测当前线程是否被打断，如果被打断了，那么什么都不处理。
-					lock.lockInterruptibly();
-					try {
-						while (last ? !offerLast(task) : !offerFirst(task)) {
-							signal.await();
-							// 线程被唤醒后，先检查线程池是否关闭，线程池关闭时，也会唤醒所有等待中的线程
-							if (!running) {
-								rejectedHandler.rejectedExecution(barrier, task, ReorderedTrackExecutor.this);
-								return;
-							}
-						}
-					} finally {
-						lock.unlock();
-					}
-				} catch (InterruptedException ex) {
-					// 回复被打断的状态
-					Thread.currentThread().interrupt();
-				}
-			} else {
-				rejectedHandler.rejectedExecution(barrier, task, ReorderedTrackExecutor.this);
+		private void _add0(Event event) {
+			if (interceptIndex >= intercepted.length) {
+				Event[] tmp = new Event[interceptIndex << 1];
+				System.arraycopy(intercepted, 0, tmp, 0, interceptIndex);
+				intercepted = tmp;
 			}
+			intercepted[interceptIndex++] = event;
+		}
+
+		private void _add1(Event event) {
+			if (barrierIndex >= barriers.length) {
+				Event[] tmp = new Event[barrierIndex << 1];
+				System.arraycopy(barriers, 0, tmp, 0, barrierIndex);
+				barriers = tmp;
+			}
+			barriers[barrierIndex++] = event;
+		}
+
+		private void _remove0(int index) {
+			for (int i = index, limit = interceptIndex - 1; i < limit; i++) {
+				intercepted[i] = intercepted[i + 1];
+			}
+			intercepted[interceptIndex] = null;
+			interceptIndex--;
+		}
+
+		private void _remove1(int index) {
+			for (int i = index, limit = barrierIndex - 1; i < limit; i++) {
+				barriers[i] = barriers[i + 1];
+			}
+			barriers[barrierIndex] = null;
+			barrierIndex--;
+		}
+
+		private boolean isReorder(Event event) {
+			for (int i = 0; i < barrierIndex; i++) {
+				if (event.reorder(track, barriers[i])) {
+					return false;
+				}
+			}
+			return true;
 		}
 
 		protected @Nullable Event next() throws InterruptedException {
 			while (true) {
-				barriers.removeIf(event -> !event.barrier.isIntercepted());
-				for (int i = 0; i < intercepted.size(); i++) {
-					Event event = intercepted.get(i);
-					if (barriers.stream().allMatch(barrier -> event.barrier.reorder(track, barrier.barrier))) {
-						if (event.barrier.tryIntercept()) {
+				for (int i = 0; i < barrierIndex; i++) {
+					Event event = barriers[i];
+					if (!event.isIntercepted()) {
+//						Debug.info("Work-" + track + " 移除屏障：" + event.task);
+						_remove1(i);
+					}
+				}
+				for (int i = 0; i < interceptIndex; i++) {
+					Event event = intercepted[i];
+					if (isReorder(event)) {
+						if (event.tryIntercept()) {
 //							Debug.info("Work-" + track + " 恢复屏障：" + event.task);
-							barriers.add(event);
+							_add1(event);
 						} else {
 //							Debug.info("Work-" + track + " 恢复任务：" + event.task);
-							intercepted.remove(i);
+							_remove0(i);
 							return event;
 						}
 					}
@@ -320,12 +339,12 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 				if (readerIndex < eventBus.writerIndex()) {
 					Event event = eventBus.getEvent(readerIndex);
 					this.readerIndex = readerIndex + 1;
-					if (event.barrier.isTrack(1L << track)) {
-						if (barriers.stream().allMatch(barrier -> event.barrier.reorder(track, barrier.barrier))) {
-							if (event.barrier.tryIntercept()) {
+					if (event.isTrack(1L << track)) {
+						if (isReorder(event)) {
+							if (event.tryIntercept()) {
 								// only execute thread return event
 //								Debug.info("Work-" + track + " 增加屏障：" + event.task);
-								barriers.add(event);
+								_add1(event);
 							} else {
 //								Debug.info("Work-" + track + " 执行任务：" + event.task);
 								eventBus.finishEvent(readerIndex);
@@ -334,25 +353,13 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 						} else {
 //							Debug.info("Work-" + track + " 缓存任务：" + event.task);
 							eventBus.finishEvent(readerIndex);
-							intercepted.add(event);
+							_add0(event);
 						}
 					}
 				} else {
 					return null;
 				}
 			}
-		}
-
-		protected boolean offerFirst(Runnable task) {
-			return false;
-		}
-
-		protected boolean offerLast(Runnable task) {
-			return false;
-		}
-
-		public void signal() {
-			signal.signal();
 		}
 
 		/**
@@ -396,42 +403,39 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 		}
 	}
 
-	public class Event {
+	public class Event extends BitsTrackBarrier {
 
 		public Runnable task;
 
-		/**
-		 * 轨道屏障
-		 * <p>
-		 * 用于处理一个轨道中的所有屏障。
-		 */
-		public final TrackBarrier barrier = new BitsTrackBarrier(nThreads);
+		public Event() {
+			super(nThreads);
+		}
 
 		public void init(Runnable task, Object fence) {
 			this.task = task;
-			this.barrier.init(fence);
+			this.init(fence);
 		}
 
 		public void init(Runnable task, Object fence0, Object fence1) {
 			this.task = task;
-			this.barrier.init(fence0, fence1);
+			this.init(fence0, fence1);
 		}
 
 		public void init(Runnable task, Object fence0, Object fence1, Object fence2) {
 			this.task = task;
-			this.barrier.init(fence0, fence1, fence2);
+			this.init(fence0, fence1, fence2);
 		}
 
 		public void init(Runnable task, Object... fences) {
 			this.task = task;
-			this.barrier.init(fences);
+			this.init(fences);
 		}
 
 		public void release(int track) {
 			task = null;
-			barrier.setIntercepted(false);
+			intercepted = false;
 			weakUp(this, track);
-			barrier.release();
+			release();
 		}
 	}
 }
