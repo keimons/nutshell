@@ -2,6 +2,7 @@ package com.keimons.nutshell.disruptor.internal;
 
 import com.keimons.nutshell.disruptor.Debug;
 import jdk.internal.vm.annotation.Contended;
+import jdk.internal.vm.annotation.ForceInline;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -89,6 +90,7 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 	}
 
 	@Override
+	@ForceInline
 	public long writerIndex() {
 		return writerIndex;
 	}

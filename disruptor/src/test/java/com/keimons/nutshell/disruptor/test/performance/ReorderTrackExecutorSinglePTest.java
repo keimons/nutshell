@@ -32,22 +32,20 @@ public class ReorderTrackExecutorSinglePTest {
 			tasks.add(() -> {});
 		}
 		tasks.add(() -> {
-			System.out.println(System.currentTimeMillis() - time.get());
+			System.out.println(Thread.currentThread() + "Thread: " + (System.currentTimeMillis() - time.get()));
 		});
 		Thread.sleep(1000);
 		System.gc();
+		Thread.sleep(1000);
 		for (int i = 0; i < tasks.size(); i++) {
 			executor0.execute(tasks.get(i));
 		}
-//		Thread.sleep(1000);
-//		for (int i = 0; i < tasks.size(); i++) {
-//			executor0.execute(tasks.get(i));
-//		}
-//		Thread.sleep(1000);
+		Thread.sleep(1000);
 		System.gc();
 		Thread.sleep(1000);
 		for (int i = 0; i < tasks.size(); i++) {
-			executor1.execute(tasks.get(i), i & 1);
+			executor1.execute(tasks.get(i), 0);
 		}
+		Thread.sleep(1000);
 	}
 }
