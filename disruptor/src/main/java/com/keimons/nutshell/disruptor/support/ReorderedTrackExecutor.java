@@ -1,18 +1,15 @@
 package com.keimons.nutshell.disruptor.support;
 
 import com.keimons.nutshell.disruptor.AbstractTrackExecutor;
-import com.keimons.nutshell.disruptor.Debug;
 import com.keimons.nutshell.disruptor.RejectedTrackExecutionHandler;
 import com.keimons.nutshell.disruptor.TrackBarrier;
 import com.keimons.nutshell.disruptor.internal.BitsTrackBarrier;
 import com.keimons.nutshell.disruptor.internal.BitsTrackEventBus;
 import com.keimons.nutshell.disruptor.internal.EventBus;
-import org.jetbrains.annotations.Nullable;
+import jdk.internal.vm.annotation.Contended;
 
 import java.util.concurrent.*;
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.LockSupport;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 环轨执行器
@@ -106,15 +103,19 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 		weakUp(event);
 	}
 
-	public void weakUp(Event event) {
+	private void weakUp(Event event) {
 		for (int i = 0; i < nThreads; i++) {
 			if (event.isTrack(i)) {
-				LockSupport.unpark(executors[i].thread);
+				ReorderedTrackWorker worker = executors[i];
+				if (worker.parked) {
+					worker.parked = false;
+					LockSupport.unpark(worker.thread);
+				}
 			}
 		}
 	}
 
-	public void weakUp(Event event, int track) {
+	private void weakUp(Event event, int track) {
 		if (!event.isSingle(track)) {
 			weakUp(event);
 		}
@@ -226,39 +227,33 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 	 **/
 	private class ReorderedTrackWorker implements Runnable {
 
+		@Contended
 		protected final Thread thread;
 
 		protected final int track;
 
-		/**
-		 * 主锁
-		 */
-		protected final ReentrantLock lock = new ReentrantLock();
+		private int interceptIndex;
 
-		/**
-		 * 等待条件
-		 */
-		protected final Condition signal = lock.newCondition();
+		private int barrierIndex;
 
-		int interceptIndex;
+		private long readerIndex;
 
 		/**
 		 * 拦截队列
 		 * <p>
 		 * 当前线程中被屏障拦截的事件，直接缓存在执行器本地，等待拦截器释放后，再执行缓存的消息。
 		 */
-		Event[] intercepted = new Event[8];
-
-		int barrierIndex;
+		private Event[] intercepted = new Event[8];
 
 		/**
 		 * 执行屏障
 		 * <p>
 		 * 事件总线上的事件，即使是由当前线程执行，也并不一定可以立即处理。
 		 */
-		Event[] barriers = new Event[8];
+		private Event[] barriers = new Event[8];
 
-		protected long readerIndex;
+		@Contended
+		volatile boolean parked;
 
 		/**
 		 * 执行器
@@ -313,7 +308,7 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 			return true;
 		}
 
-		protected @Nullable Event next() throws InterruptedException {
+		private Event next() {
 			while (true) {
 				for (int i = 0; i < barrierIndex; i++) {
 					Event event = barriers[i];
@@ -378,6 +373,7 @@ public class ReorderedTrackExecutor extends AbstractTrackExecutor {
 						try {
 							event = next();
 							if (event == null) {
+								parked = true;
 								LockSupport.park();
 							} else {
 								event.task.run();

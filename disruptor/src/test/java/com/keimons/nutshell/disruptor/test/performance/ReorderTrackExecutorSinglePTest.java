@@ -21,15 +21,16 @@ public class ReorderTrackExecutorSinglePTest {
 
 	@Test
 	public void test() throws InterruptedException {
-		ExecutorService executor0 = Executors.newFixedThreadPool(4);
+		ExecutorService executor0 = Executors.newFixedThreadPool(1);
 
-		ReorderedTrackExecutor executor1 = new ReorderedTrackExecutor("ReorderedTrackExecutor", 4, 1024, new AbortPolicy());
+		ReorderedTrackExecutor executor1 = new ReorderedTrackExecutor("ReorderedTrackExecutor", 2, 1024, new AbortPolicy());
 
 		List<Runnable> tasks = new ArrayList<>(1000000);
 		AtomicLong time = new AtomicLong();
 		tasks.add(() -> time.set(System.currentTimeMillis()));
 		for (int i = 0; i < 999998; i++) {
-			tasks.add(() -> {});
+			tasks.add(() -> {
+			});
 		}
 		tasks.add(() -> {
 			System.out.println(Thread.currentThread() + "Thread: " + (System.currentTimeMillis() - time.get()));
@@ -44,7 +45,7 @@ public class ReorderTrackExecutorSinglePTest {
 		System.gc();
 		Thread.sleep(1000);
 		for (int i = 0; i < tasks.size(); i++) {
-			executor1.execute(tasks.get(i), 0);
+			executor1.execute(tasks.get(i), i & 0x1);
 		}
 		Thread.sleep(1000);
 	}
