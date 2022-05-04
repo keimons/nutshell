@@ -5,7 +5,6 @@ import jdk.internal.vm.annotation.Contended;
 import jdk.internal.vm.annotation.ForceInline;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 

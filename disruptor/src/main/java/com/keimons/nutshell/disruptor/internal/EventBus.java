@@ -1,5 +1,7 @@
 package com.keimons.nutshell.disruptor.internal;
 
+import jdk.internal.vm.annotation.ForceInline;
+
 /**
  * 事件总线
  * <p>
@@ -19,6 +21,7 @@ package com.keimons.nutshell.disruptor.internal;
  **/
 public interface EventBus<T> {
 
+	@ForceInline
 	long writerIndex();
 
 	/**

@@ -1,5 +1,7 @@
 package com.keimons.nutshell.disruptor;
 
+import jdk.internal.vm.annotation.ForceInline;
+
 /**
  * 轨道屏障
  * <p>
