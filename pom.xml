@@ -21,7 +21,7 @@
         </plugins>
     </build>
     <modules>
-        <module>disruptor</module>
+        <module>explorer</module>
     </modules>
     <dependencies>
         <dependency>
