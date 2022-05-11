@@ -5,7 +5,7 @@ Explorer的使用是非常简单。
 首先，创建一个拥有8个线程的线程池：
 
 ```
-ReorderedExplorerService explorer = new ReorderedExplorerService(8);
+ReorderedExplorer explorer = new ReorderedExplorer(8);
 ```
 
 然后，带上任务的一个或多个`key`提交到线程池即可：
