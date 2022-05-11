@@ -119,7 +119,7 @@ public class LinkedCommitterPolicy implements CommitterStrategy {
 					busy.set(FREE);
 					return;
 				}
-				Explorer strategy = ExecutorManager.getExecutorStrategy(work.getExecutorStrategy());
+				ExplorerService strategy = ExecutorManager.getExecutorStrategy(work.getExecutorStrategy());
 				strategy.execute(buildLinkedTask(work), work.getBarrier());
 			}
 		}

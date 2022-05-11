@@ -1,9 +1,9 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.BlockingCallerHandler;
+import com.keimons.nutshell.explorer.ExplorerService;
 import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
 import com.keimons.nutshell.explorer.TrackBarrier;
-import com.keimons.nutshell.explorer.Explorer;
 
 import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
@@ -12,7 +12,7 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * 共享队列执行器
  * <p>
- * 共享队列执行器是{@link ThreadPoolExecutor}拓展，添加了对于{@link Explorer}的支持。
+ * 共享队列执行器是{@link ThreadPoolExecutor}拓展，添加了对于{@link ExplorerService}的支持。
  * <dl>
  *     <dt>固定线程数量</dt>
  *     <dd>共享队列执行器仅支持固定数量的线程池，这也意味着它在运行时更改线程数量是无效的。
@@ -35,7 +35,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @version 1.0
  * @since 11
  */
-public class SharedQueueExecutor extends ThreadPoolExecutor implements Explorer {
+public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerService {
 
 	/**
 	 * 执行器名称
@@ -80,11 +80,11 @@ public class SharedQueueExecutor extends ThreadPoolExecutor implements Explorer 
 	 * @param nThreads        启动线程
 	 * @param rejectedHandler 拒绝执行策略
 	 */
-	public SharedQueueExecutor(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler) {
+	public SharedQueueExplorer(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler) {
 		this(name, nThreads, new LinkedBlockingDeque<>(8), rejectedHandler);
 	}
 
-	private SharedQueueExecutor(String name, int nThreads, BlockingDeque<Runnable> sharedQueue, RejectedTrackExecutionHandler rejectedHandler) {
+	private SharedQueueExplorer(String name, int nThreads, BlockingDeque<Runnable> sharedQueue, RejectedTrackExecutionHandler rejectedHandler) {
 		super(nThreads, nThreads, 0, TimeUnit.MILLISECONDS, sharedQueue, new InternalRejectedExecutionHandler());
 		this.name = name;
 		this.sharedQueue = sharedQueue;

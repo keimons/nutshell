@@ -1,16 +1,10 @@
 package com.keimons.nutshell.explorer.support;
 
-import com.keimons.nutshell.explorer.AbstractExplorer;
-import com.keimons.nutshell.explorer.Interceptor;
-import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
-import com.keimons.nutshell.explorer.TrackBarrier;
+import com.keimons.nutshell.explorer.*;
 import com.keimons.nutshell.explorer.internal.BitsTrackEventBus;
-import com.keimons.nutshell.explorer.internal.EventBus;
 import jdk.internal.vm.annotation.Contended;
 import jdk.internal.vm.annotation.ForceInline;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
@@ -74,23 +68,38 @@ import java.util.concurrent.locks.LockSupport;
  * @version 1.0
  * @since 11
  **/
-public class ReorderedExplorer extends AbstractExplorer {
+public class ReorderedExplorer extends AbstractExplorerService {
+
+	public static final int DEFAULT_THREAD_CAPACITY = 1024;
+
+	private static final String DEFAULT_NAME = "ReorderedExplorer";
 
 	/**
 	 * 事件总线
 	 * <p>
 	 * 所有任务都发布在事件总线上，如果事件总线不能发布任务，任务发布失败，则队列已满。
 	 */
-	private final EventBus<Node> eventBus;
+	private final BitsTrackEventBus<Node> eventBus;
 
 	/**
 	 * 任务执行器
 	 */
 	private final ReorderedTrackWorker[] executors;
 
+	public ReorderedExplorer(int nThreads) {
+		super(DEFAULT_NAME, nThreads, DefaultRejectedHandler);
+		eventBus = new BitsTrackEventBus<>(Node::new, nThreads * DEFAULT_THREAD_CAPACITY, nThreads);
+		executors = new ReorderedTrackWorker[nThreads];
+		for (int i = 0; i < nThreads; i++) {
+			ReorderedTrackWorker executor = new ReorderedTrackWorker(i, threadFactory);
+			executor.thread.start();
+			executors[i] = executor;
+		}
+	}
+
 	public ReorderedExplorer(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler) {
 		super(name, nThreads, rejectedHandler);
-		eventBus = new BitsTrackEventBus<>(Node::new, capacity);
+		eventBus = new BitsTrackEventBus<>(Node::new, capacity, nThreads);
 		executors = new ReorderedTrackWorker[nThreads];
 		for (int i = 0; i < nThreads; i++) {
 			ReorderedTrackWorker executor = new ReorderedTrackWorker(i, threadFactory);
@@ -104,7 +113,15 @@ public class ReorderedExplorer extends AbstractExplorer {
 		Node node = eventBus.borrowEvent();
 		node.init(task, fence);
 		eventBus.publishEvent(node);
-		weakUp(node);
+		weakUp(fence.hashCode() % nThreads);
+	}
+
+	private void weakUp(int track) {
+		ReorderedTrackWorker worker = executors[track];
+		if (worker.parked) {
+			worker.parked = false;
+			LockSupport.unpark(worker.thread);
+		}
 	}
 
 	private void weakUp(Node node) {
@@ -116,12 +133,6 @@ public class ReorderedExplorer extends AbstractExplorer {
 					LockSupport.unpark(worker.thread);
 				}
 			}
-		}
-	}
-
-	private void weakUp(Node node, int track) {
-		if (!node.isSingle(track)) {
-			weakUp(node);
 		}
 	}
 
@@ -240,7 +251,8 @@ public class ReorderedExplorer extends AbstractExplorer {
 
 		private int barrierIndex;
 
-		private long readerIndex;
+		@Contended
+		private volatile long readerIndex;
 
 		/**
 		 * 拦截队列
@@ -317,7 +329,7 @@ public class ReorderedExplorer extends AbstractExplorer {
 				for (int i = 0; i < barrierIndex; i++) {
 					Node node = barriers[i];
 					if (!node.isIntercepted()) {
-//						Debug.info("Work-" + track + " 移除屏障：" + event.task);
+						Debug.info("Work-" + track + " 移除屏障：" + node.task);
 						_remove1(i);
 					}
 				}
@@ -325,32 +337,36 @@ public class ReorderedExplorer extends AbstractExplorer {
 					Node node = intercepted[i];
 					if (isReorder(node)) {
 						if (node.tryIntercept()) {
-//							Debug.info("Work-" + track + " 恢复屏障：" + event.task);
+							Debug.info("Work-" + track + " 恢复屏障：" + node.task);
 							_add1(node);
 						} else {
-//							Debug.info("Work-" + track + " 恢复任务：" + event.task);
+							Debug.info("Work-" + track + " 恢复任务：" + node.task);
 							_remove0(i);
 							return node;
 						}
 					}
 				}
-				long readerIndex = this.readerIndex;
+				final long readerIndex = this.readerIndex;
 				if (readerIndex < eventBus.writerIndex()) {
 					Node node = eventBus.getEvent(readerIndex);
 					this.readerIndex = readerIndex + 1;
+					if (node == null) {
+						continue;
+					}
 					if (node.isTrack(1L << track)) {
 						if (isReorder(node)) {
 							if (node.tryIntercept()) {
 								// only execute thread return event
-//								Debug.info("Work-" + track + " 增加屏障：" + event.task);
+								Debug.info("Work-" + track + " 增加屏障：" + node.task);
 								_add1(node);
 							} else {
 //								Debug.info("Work-" + track + " 执行任务：" + event.task);
+//								System.out.println(node.task.toString());
 								eventBus.finishEvent(readerIndex);
 								return node;
 							}
 						} else {
-//							Debug.info("Work-" + track + " 缓存任务：" + event.task);
+							Debug.info("Work-" + track + " 缓存任务：" + node.task);
 							eventBus.finishEvent(readerIndex);
 							_add0(node);
 						}
@@ -384,6 +400,7 @@ public class ReorderedExplorer extends AbstractExplorer {
 							}
 						} catch (Throwable e) {
 							// ignore
+							e.printStackTrace();
 						} finally {
 							if (node != null) {
 								node.release(track);
@@ -393,6 +410,7 @@ public class ReorderedExplorer extends AbstractExplorer {
 					}
 				} catch (Throwable e) {
 					// ignore
+					e.printStackTrace();
 				}
 			}
 		}
@@ -412,10 +430,14 @@ public class ReorderedExplorer extends AbstractExplorer {
 		 */
 		private final int nTracks;
 
+		private int capacity = 16;
+
+		private int writerIndex;
+
 		/**
 		 * 屏障
 		 */
-		private final List<Object> fences;
+		private Object[] fences = new Object[16];
 
 		@Contended
 		public final AtomicInteger forbids = new AtomicInteger();
@@ -436,14 +458,19 @@ public class ReorderedExplorer extends AbstractExplorer {
 				throw new IllegalArgumentException("nTracks must not more than 64");
 			}
 			this.nTracks = nThreads;
-			this.fences = new ArrayList<>();
 		}
 
 		private void init0(Object fence) {
 			int hashcode = fence.hashCode();
 			int track = hashcode % nTracks;
 			bits |= (1L << track);
-			fences.add(fence);
+			if (writerIndex >= capacity) {
+				capacity <<= 1;
+				Object[] tmp = new Object[capacity];
+				System.arraycopy(fences, 0, tmp, 0, writerIndex);
+				fences = tmp;
+			}
+			fences[writerIndex++] = fence;
 		}
 
 		public void init(Object fence) {
@@ -510,7 +537,14 @@ public class ReorderedExplorer extends AbstractExplorer {
 			if ((bits & other.bits) == 0) {
 				throw new IllegalStateException("unknown state: " + other.getClass());
 			}
-			return !fences.contains(track);
+			for (int i = 0; i < writerIndex; i++) {
+				for (int j = 0; j < other.writerIndex; j++) {
+					if (fences[i].equals(other.fences[j])) {
+						return false;
+					}
+				}
+			}
+			return true;
 		}
 
 		public boolean isTrack(int track) {
@@ -521,10 +555,15 @@ public class ReorderedExplorer extends AbstractExplorer {
 			return bits == 1L << track;
 		}
 
+		/**
+		 * 已废弃，节点释放时直接释放锁
+		 *
+		 * @see #release(int) 释放锁
+		 */
 		@Override
+		@Deprecated
 		public void release() {
-			this.fences.clear();
-			this.bits = 0L;
+			throw new UnsupportedOperationException();
 		}
 
 		public void init(Runnable task, Object fence) {
@@ -549,9 +588,18 @@ public class ReorderedExplorer extends AbstractExplorer {
 
 		public void release(int track) {
 			this.task = null;
+			this.writerIndex = 0;
 			this.intercepted = false;
-			weakUp(this, track);
-			release();
+			if (bits != 1L << track) {
+				// 唤醒其它线程
+				weakUp(this);
+			}
+			this.bits = 0L;
+		}
+
+		@Override
+		public String toString() {
+			return task == null ? "null" : String.valueOf(((Task) task).value);
 		}
 	}
 }

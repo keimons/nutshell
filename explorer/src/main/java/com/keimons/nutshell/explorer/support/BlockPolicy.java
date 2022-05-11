@@ -1,7 +1,7 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.BlockingCallerHandler;
-import com.keimons.nutshell.explorer.Explorer;
+import com.keimons.nutshell.explorer.ExplorerService;
 
 import java.util.concurrent.RejectedExecutionException;
 
@@ -15,7 +15,7 @@ import java.util.concurrent.RejectedExecutionException;
 public class BlockPolicy implements BlockingCallerHandler {
 
 	@Override
-	public void rejectedExecution(Object fence, Runnable task, Explorer executor) {
+	public void rejectedExecution(Object fence, Runnable task, ExplorerService executor) {
 		throw new RejectedExecutionException("Task " + task.toString() + " rejected from " + executor.getName());
 	}
 }

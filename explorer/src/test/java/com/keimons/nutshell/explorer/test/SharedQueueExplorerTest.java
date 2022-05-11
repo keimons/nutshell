@@ -1,24 +1,24 @@
 package com.keimons.nutshell.explorer.test;
 
+import com.keimons.nutshell.explorer.ExplorerService;
 import com.keimons.nutshell.explorer.TrackBarrier;
-import com.keimons.nutshell.explorer.Explorer;
 import com.keimons.nutshell.explorer.internal.BitsTrackBarrier;
 import com.keimons.nutshell.explorer.support.BlockPolicy;
-import com.keimons.nutshell.explorer.support.SharedQueueExecutor;
+import com.keimons.nutshell.explorer.support.SharedQueueExplorer;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link SharedQueueExecutor}测试
+ * {@link SharedQueueExplorer}测试
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @since 11
  */
-public class SharedQueueExecutorTest {
+public class SharedQueueExplorerTest {
 
 	@Test
 	public void test() throws InterruptedException {
-		Explorer executor = new SharedQueueExecutor("SharedExecutor", 4, new BlockPolicy());
+		ExplorerService executor = new SharedQueueExplorer("SharedExecutor", 4, new BlockPolicy());
 		for (int i = 0; i < 16; i++) {
 			TrackBarrier barrier = new BitsTrackBarrier(16);
 			barrier.init(0);

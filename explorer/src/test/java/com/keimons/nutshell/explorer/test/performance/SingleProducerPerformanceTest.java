@@ -29,7 +29,16 @@ public class SingleProducerPerformanceTest {
 		AtomicLong time = new AtomicLong();
 		tasks.add(() -> time.set(System.currentTimeMillis()));
 		for (int i = 0; i < 999998; i++) {
-			tasks.add(() -> {
+			int v = i;
+			tasks.add(new Runnable() {
+				@Override
+				public void run() {
+
+				}
+
+				public String toString() {
+					return String.valueOf(v);
+				}
 			});
 		}
 		tasks.add(() -> {
@@ -48,9 +57,9 @@ public class SingleProducerPerformanceTest {
 		Thread.sleep(1000);
 	}
 
-	@DisplayName("Looper测试")
+	@DisplayName("Explorer测试")
 	@Test
-	public void testLooper() throws InterruptedException {
+	public void testExplorer() throws InterruptedException {
 		ReorderedExplorer executor1 = new ReorderedExplorer("ReorderedTrackExecutor", 1, 1024, new AbortPolicy());
 		Thread.sleep(100);
 		for (int i = 0; i < tasks.size(); i++) {

@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer.support;
 
-import com.keimons.nutshell.explorer.AbstractExplorer;
+import com.keimons.nutshell.explorer.AbstractExplorerService;
 import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
 import com.keimons.nutshell.explorer.TrackBarrier;
 
@@ -15,7 +15,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @version 1.0
  * @since 11
  */
-public class QueueExplorer extends AbstractExplorer {
+public class QueueExplorer extends AbstractExplorerService {
 
 	/**
 	 * 任务执行器
