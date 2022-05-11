@@ -7,7 +7,7 @@ import com.keimons.nutshell.explorer.support.LocalPolicy;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
- * 无法由{@link Explorer}执行的任务的处理程序
+ * 无法由{@link ExplorerService}执行的任务的处理程序
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
@@ -18,11 +18,11 @@ public interface RejectedTrackExecutionHandler {
 	/**
 	 * 拒绝执行
 	 * <p>
-	 * 当{@link Explorer}拒绝执行此任务时调用。拒绝执行的原因可能是：
+	 * 当{@link ExplorerService}拒绝执行此任务时调用。拒绝执行的原因可能是：
 	 * <ul>
 	 *     <li>没有线程执行此任务。</li>
 	 *     <li>队列已满，任务不能加入到队列中。</li>
-	 *     <li>{@link Explorer}已经关闭。</li>
+	 *     <li>{@link ExplorerService}已经关闭。</li>
 	 * </ul>
 	 * 当任务被拒绝执行时，提供以下解决方案：
 	 * <ul>
@@ -39,5 +39,5 @@ public interface RejectedTrackExecutionHandler {
 	 * @param executor 任务的执行者
 	 * @throws RejectedExecutionException 拒绝执行异常
 	 */
-	void rejectedExecution(Object fence, Runnable task, Explorer executor);
+	void rejectedExecution(Object fence, Runnable task, ExplorerService executor);
 }

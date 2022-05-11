@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer.support;
 
-import com.keimons.nutshell.explorer.AbstractExplorer;
+import com.keimons.nutshell.explorer.AbstractExplorerService;
 import com.keimons.nutshell.explorer.TrackBarrier;
 
 import java.util.concurrent.Callable;
@@ -20,15 +20,15 @@ import java.util.concurrent.RunnableFuture;
  * @version 1.0
  * @since 11
  */
-public class DirectExecutor extends AbstractExplorer {
+public class DirectExplorer extends AbstractExplorerService {
 
-	private static final String NAME = "DIRECT";
+	private static final String NAME = "DirectExplorer";
 
-	public DirectExecutor() {
+	public DirectExplorer() {
 		this(NAME);
 	}
 
-	public DirectExecutor(String name) {
+	public DirectExplorer(String name) {
 		super(name, 0, DefaultRejectedHandler);
 	}
 

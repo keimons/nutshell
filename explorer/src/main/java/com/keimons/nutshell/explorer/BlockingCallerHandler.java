@@ -24,5 +24,5 @@ public interface BlockingCallerHandler extends RejectedTrackExecutionHandler {
 	 * @param executor 执行线程
 	 */
 	@Override
-	void rejectedExecution(Object fence, Runnable task, Explorer executor);
+	void rejectedExecution(Object fence, Runnable task, ExplorerService executor);
 }

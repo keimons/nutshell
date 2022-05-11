@@ -12,7 +12,7 @@ import java.util.concurrent.ThreadFactory;
  * @version 1.0
  * @since 11
  */
-public abstract class AbstractExplorer implements Explorer {
+public abstract class AbstractExplorerService implements ExplorerService {
 
 	protected static final RejectedTrackExecutionHandler DefaultRejectedHandler = new AbortPolicy();
 
@@ -48,7 +48,7 @@ public abstract class AbstractExplorer implements Explorer {
 	 * @param nThreads        线程数量
 	 * @param rejectedHandler 被拒绝执行任务的处理句柄
 	 */
-	public AbstractExplorer(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler) {
+	public AbstractExplorerService(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler) {
 		this.name = name;
 		this.nThreads = nThreads;
 		this.rejectedHandler = rejectedHandler;

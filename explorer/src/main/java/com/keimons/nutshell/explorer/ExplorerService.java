@@ -5,7 +5,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * 轨道任务执行器
+ * 探索者任务执行器
  * <p>
  * 执行提交的带有轨道屏障的{@link Runnable}或{@link Callable}任务的对象。
  * 默认有3个实现，分别是即时执行器、共享队列执行器、轨道队列执行器。
@@ -54,7 +54,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * @version 1.0
  * @since 11
  */
-public interface Explorer {
+public interface ExplorerService {
 
 	/**
 	 * 获取任务执行器的名称

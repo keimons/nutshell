@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.keimons.nutshell-explorer</groupId>
-    <artifactId>looper</artifactId>
+    <artifactId>explorer</artifactId>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
