@@ -2,7 +2,6 @@ package com.keimons.nutshell.explorer;
 
 import com.keimons.nutshell.explorer.support.AbortPolicy;
 
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
 /**
@@ -14,7 +13,7 @@ import java.util.concurrent.ThreadFactory;
  */
 public abstract class AbstractExplorerService implements ExplorerService {
 
-	protected static final RejectedTrackExecutionHandler DefaultRejectedHandler = new AbortPolicy();
+	public static final RejectedTrackExecutionHandler DefaultRejectedHandler = new AbortPolicy();
 
 	/**
 	 * 策略名称
@@ -38,7 +37,7 @@ public abstract class AbstractExplorerService implements ExplorerService {
 	/**
 	 * 线程工厂
 	 */
-	protected ThreadFactory threadFactory = Executors.defaultThreadFactory();
+	protected final ThreadFactory threadFactory;
 	protected volatile boolean running = true;
 
 	/**
@@ -47,12 +46,14 @@ public abstract class AbstractExplorerService implements ExplorerService {
 	 * @param name            执行器名称
 	 * @param nThreads        线程数量
 	 * @param rejectedHandler 被拒绝执行任务的处理句柄
+	 * @param threadFactory   线程工厂
 	 */
-	public AbstractExplorerService(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler) {
+	public AbstractExplorerService(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler, ThreadFactory threadFactory) {
 		this.name = name;
 		this.nThreads = nThreads;
 		this.rejectedHandler = rejectedHandler;
 		this.blockingCaller = rejectedHandler instanceof BlockingCallerHandler;
+		this.threadFactory = threadFactory;
 	}
 
 	@Override

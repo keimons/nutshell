@@ -171,12 +171,12 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 	}
 
 	@Override
-	public Future<?> submit(Runnable task, TrackBarrier barrier) {
+	public Future<?> submit(Runnable task, Object fence) {
 		if (task == null) {
 			throw new NullPointerException();
 		}
 		RunnableFuture<Void> future = newTaskFor(task, null);
-		execute(future, barrier);
+		execute(future, fence);
 		return future;
 	}
 

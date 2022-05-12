@@ -3,10 +3,7 @@ package com.keimons.nutshell.explorer.support;
 import com.keimons.nutshell.explorer.AbstractExplorerService;
 import com.keimons.nutshell.explorer.TrackBarrier;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.RunnableFuture;
+import java.util.concurrent.*;
 
 /**
  * 即时执行器
@@ -29,7 +26,7 @@ public class DirectExplorer extends AbstractExplorerService {
 	}
 
 	public DirectExplorer(String name) {
-		super(name, 0, DefaultRejectedHandler);
+		super(name, 0, DefaultRejectedHandler,  Executors.defaultThreadFactory());
 	}
 
 	@Override
@@ -43,7 +40,7 @@ public class DirectExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public Future<?> submit(Runnable task, TrackBarrier barrier) {
+	public Future<?> submit(Runnable task, Object fence) {
 		RunnableFuture<?> future = new FutureTask<>(task, null);
 		future.run();
 		return future;
