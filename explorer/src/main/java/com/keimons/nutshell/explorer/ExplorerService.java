@@ -99,11 +99,11 @@ public interface ExplorerService {
 	 * <p>
 	 * 该方法可能会阻塞当前线程，直到任务执行完毕。
 	 *
-	 * @param task    任务
-	 * @param barrier 执行屏障
+	 * @param task  任务
+	 * @param fence 执行屏障
 	 * @return 待完成任务的异步计算的结果
 	 */
-	Future<?> submit(Runnable task, TrackBarrier barrier);
+	Future<?> submit(Runnable task, Object fence);
 
 	/**
 	 * 提交任务（立即执行）

@@ -1,7 +1,9 @@
 package com.keimons.nutshell.explorer.test;
 
-import com.keimons.nutshell.explorer.support.AbortPolicy;
+import com.keimons.nutshell.explorer.Debug;
 import com.keimons.nutshell.explorer.support.ReorderedExplorer;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -13,10 +15,15 @@ import org.junit.jupiter.api.Test;
  */
 public class ReorderedExplorerTest {
 
+	@BeforeAll
+	public static void beforeTest() {
+		Debug.DEBUG = true;
+	}
+
 	@Test
 	public void test() throws InterruptedException {
-		ReorderedExplorer executor = new ReorderedExplorer("ReorderedTrack", 1, 1024, new AbortPolicy());
-		executor.execute(new Runnable() {
+		ReorderedExplorer explorer = new ReorderedExplorer(4);
+		explorer.execute(new Runnable() {
 			@Override
 			public void run() {
 				try {
@@ -33,7 +40,7 @@ public class ReorderedExplorerTest {
 			}
 		}, 0, 1);
 
-		executor.execute(new Runnable() {
+		explorer.execute(new Runnable() {
 			@Override
 			public void run() {
 				System.out.println(this + " execute by: " + Thread.currentThread());
@@ -45,7 +52,7 @@ public class ReorderedExplorerTest {
 			}
 		}, 0);
 
-		executor.execute(new Runnable() {
+		explorer.execute(new Runnable() {
 			@Override
 			public void run() {
 				System.out.println(this + " execute by: " + Thread.currentThread());
@@ -57,7 +64,7 @@ public class ReorderedExplorerTest {
 			}
 		}, 1);
 
-		executor.execute(new Runnable() {
+		explorer.execute(new Runnable() {
 			@Override
 			public void run() {
 				System.out.println(this + " execute by: " + Thread.currentThread());
@@ -69,7 +76,7 @@ public class ReorderedExplorerTest {
 			}
 		}, 4);
 
-		executor.execute(new Runnable() {
+		explorer.execute(new Runnable() {
 			@Override
 			public void run() {
 				System.out.println(this + " execute by: " + Thread.currentThread());
@@ -82,5 +89,30 @@ public class ReorderedExplorerTest {
 		}, 5);
 
 		Thread.sleep(10000);
+	}
+
+	@DisplayName("顺序测试")
+	@Test
+	public void testOrdered() throws InterruptedException {
+		ThreadLocal<Integer> LOCAL = new ThreadLocal<>();
+		ReorderedExplorer explorer = new ReorderedExplorer(4);
+		explorer.execute(() -> LOCAL.set(-4), 0);
+		explorer.execute(() -> LOCAL.set(-3), 1);
+		explorer.execute(() -> LOCAL.set(-2), 2);
+		explorer.execute(() -> LOCAL.set(-1), 3);
+		for (int i = 0; i < 10000000; i++) {
+			final int value = i;
+			explorer.execute(() -> {
+				if (value - LOCAL.get() != 4) {
+					System.err.println("ordered failed.");
+				}
+				LOCAL.set(value);
+			}, i & 3);
+		}
+		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 0);
+		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 1);
+		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 2);
+		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 3);
+		Thread.sleep(5000);
 	}
 }

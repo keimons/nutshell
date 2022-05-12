@@ -23,7 +23,7 @@ public class QueueExplorer extends AbstractExplorerService {
 	private final AbstractExecutor[] executors;
 
 	public QueueExplorer(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler) {
-		super(name, nThreads, rejectedHandler);
+		super(name, nThreads, rejectedHandler, Executors.defaultThreadFactory());
 		executors = new AbstractExecutor[nThreads];
 		for (int i = 0; i < nThreads; i++) {
 			UnboundedExecutor executor = new UnboundedExecutor();
@@ -49,9 +49,9 @@ public class QueueExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public Future<?> submit(Runnable task, TrackBarrier barrier) {
+	public Future<?> submit(Runnable task, Object fence) {
 		RunnableFuture<Void> future = new FutureTask<>(task, null);
-		execute(future, barrier);
+		execute(future, fence);
 		return future;
 	}
 

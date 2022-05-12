@@ -73,7 +73,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 	public static final int DEFAULT_THREAD_CAPACITY = 1024;
 
-	private static final String DEFAULT_NAME = "ReorderedExplorer";
+	public static final String DEFAULT_NAME = "ReorderedExplorer";
 
 	/**
 	 * 事件总线
@@ -88,18 +88,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	private final ReorderedTrackWorker[] executors;
 
 	public ReorderedExplorer(int nThreads) {
-		super(DEFAULT_NAME, nThreads, DefaultRejectedHandler);
-		eventBus = new BitsTrackEventBus<>(Node::new, nThreads * DEFAULT_THREAD_CAPACITY, nThreads);
-		executors = new ReorderedTrackWorker[nThreads];
-		for (int i = 0; i < nThreads; i++) {
-			ReorderedTrackWorker executor = new ReorderedTrackWorker(i, threadFactory);
-			executor.thread.start();
-			executors[i] = executor;
-		}
+		this(DEFAULT_NAME, nThreads, nThreads * DEFAULT_THREAD_CAPACITY, DefaultRejectedHandler, Executors.defaultThreadFactory());
 	}
 
-	public ReorderedExplorer(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler) {
-		super(name, nThreads, rejectedHandler);
+	public ReorderedExplorer(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler, ThreadFactory threadFactory) {
+		super(name, nThreads, rejectedHandler, threadFactory);
 		eventBus = new BitsTrackEventBus<>(Node::new, capacity, nThreads);
 		executors = new ReorderedTrackWorker[nThreads];
 		for (int i = 0; i < nThreads; i++) {
@@ -109,14 +102,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 	}
 
-	@Override
-	public void execute(Runnable task, Object fence) {
-		Node node = eventBus.borrowEvent();
-		node.init(task, fence);
-		eventBus.publishEvent(node);
-		weakUp(fence.hashCode() % nThreads);
-	}
-
+	/**
+	 * 唤醒线程
+	 *
+	 * @param track 轨道
+	 */
 	private void weakUp(int track) {
 		ReorderedTrackWorker worker = executors[track];
 		if (worker.parked) {
@@ -125,6 +115,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 	}
 
+	/**
+	 * 根据节点唤醒线程
+	 *
+	 * @param node 节点
+	 */
 	private void weakUp(Node node) {
 		for (int i = 0; i < nThreads; i++) {
 			if (node.isTrack(i)) {
@@ -137,28 +132,45 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 	}
 
+	@Override
+	public void execute(Runnable task, Object fence) {
+		Node node = eventBus.borrowEvent();
+		node.init(task, fence);
+		eventBus.publishEvent(node);
+		weakUp(fence.hashCode() % nThreads);
+	}
+
 	public void execute(Runnable task, Object fence0, Object fence1) {
 		Node node = eventBus.borrowEvent();
 		node.init(task, fence0, fence1);
 		eventBus.publishEvent(node);
+		weakUp(node);
 	}
 
 	public void execute(Runnable task, Object fence0, Object fence1, Object fence2) {
 		Node node = eventBus.borrowEvent();
 		node.init(task, fence0, fence1, fence2);
 		eventBus.publishEvent(node);
+		weakUp(node);
 	}
 
 	public void execute(Runnable task, Object... fences) {
 		Node node = eventBus.borrowEvent();
 		node.init(task, fences);
 		eventBus.publishEvent(node);
+		weakUp(node);
 	}
 
 	@Override
-	public Future<?> submit(Runnable task, TrackBarrier barrier) {
+	public Future<?> submit(Runnable task, Object fence) {
 		RunnableFuture<Void> future = new FutureTask<>(task, null);
-		execute(future, barrier);
+		execute(future, fence);
+		return future;
+	}
+
+	public Future<?> submit(Runnable task, Object fence1, Object fence2) {
+		RunnableFuture<Void> future = new FutureTask<>(task, null);
+		execute(future, fence1, fence2);
 		return future;
 	}
 
@@ -317,8 +329,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		private boolean isReorder(Node node) {
+			// 判断是否可以越过所有屏障执行任务
 			for (int i = 0; i < barrierIndex; i++) {
-				if (node.reorder(track, barriers[i])) {
+				if (!node.isReorder(barriers[i])) {
 					return false;
 				}
 			}
@@ -330,7 +343,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				for (int i = 0; i < barrierIndex; i++) {
 					Node node = barriers[i];
 					if (!node.isIntercepted()) {
-						Debug.info("Work-" + track + " 移除屏障：" + node.task);
+//						Debug.info("Work-" + track + " 移除屏障：" + node);
 						_remove1(i);
 					}
 				}
@@ -338,10 +351,10 @@ public class ReorderedExplorer extends AbstractExplorerService {
 					Node node = intercepted[i];
 					if (isReorder(node)) {
 						if (node.tryIntercept()) {
-							Debug.info("Work-" + track + " 恢复屏障：" + node.task);
+//							Debug.info("Work-" + track + " 恢复屏障：" + node.task);
 							_add1(node);
 						} else {
-							Debug.info("Work-" + track + " 恢复任务：" + node.task);
+//							Debug.info("Work-" + track + " 恢复任务：" + node.task);
 							_remove0(i);
 							return node;
 						}
@@ -361,7 +374,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 //								Debug.info("Work-" + track + " 增加屏障：" + node.task);
 								_add1(node);
 							} else {
-//								Debug.info("Work-" + track + " 执行任务：" + event.task);
+//								Debug.info("Work-" + track + " 执行任务：" + node.task);
 								eventBus.finishEvent(readerIndex);
 								return node;
 							}
@@ -540,13 +553,19 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			return (this.bits & bits) != 0;
 		}
 
-		public boolean reorder(int track, Node other) {
-			if ((bits & other.bits) == 0) {
-				throw new IllegalStateException("unknown state: " + other.getClass());
-			}
-			for (int i = 0; i < writerIndex; i++) {
-				for (int j = 0; j < other.writerIndex; j++) {
-					if (fences[i].equals(other.fences[j])) {
+		/**
+		 * 判断另一个节点是否能越过当前节点执行
+		 *
+		 * @param other 后续节点
+		 * @return {@code true}可以越过当前栅栏，{@code false}不能越过当前栅栏
+		 */
+		public boolean isReorder(Node other) {
+			// 设计考虑到key的数量有限，所以直接使用双循环判断
+			// 优先循环后续节点，因为很有可能只有一个key。
+			for (int i = 0; i < other.writerIndex; i++) {
+				Object fence = other.fences[i];
+				for (int j = 0; j < this.writerIndex; j++) {
+					if (this.fences[j].equals(fence)) {
 						return false;
 					}
 				}
@@ -554,12 +573,14 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			return true;
 		}
 
+		/**
+		 * 判断节点是否该轨道上
+		 *
+		 * @param track 轨道
+		 * @return 是否在当前轨道
+		 */
 		public boolean isTrack(int track) {
 			return (bits & 1L << track) != 0;
-		}
-
-		public boolean isSingle(int track) {
-			return bits == 1L << track;
 		}
 
 		/**

@@ -9,13 +9,17 @@ package com.keimons.nutshell.explorer;
  **/
 public class Debug {
 
+	public static boolean DEBUG = false;
+
 	/**
 	 * 信息
 	 *
 	 * @param msg 信息内容
 	 */
 	public static void info(String msg) {
-		System.out.println(msg);
+		if (DEBUG) {
+			System.out.println(msg);
+		}
 	}
 
 	/**
@@ -24,6 +28,8 @@ public class Debug {
 	 * @param msg 警告内容
 	 */
 	public static void warn(String msg) {
-//		System.out.println(msg);
+		if (DEBUG) {
+			System.out.println(msg);
+		}
 	}
 }
