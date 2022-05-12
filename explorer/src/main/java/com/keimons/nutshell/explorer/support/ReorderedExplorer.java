@@ -2,11 +2,12 @@ package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.*;
 import com.keimons.nutshell.explorer.internal.BitsTrackEventBus;
+import com.keimons.nutshell.explorer.utils.XUtils;
 import jdk.internal.vm.annotation.Contended;
 import jdk.internal.vm.annotation.ForceInline;
 
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -357,16 +358,15 @@ public class ReorderedExplorer extends AbstractExplorerService {
 						if (isReorder(node)) {
 							if (node.tryIntercept()) {
 								// only execute thread return event
-								Debug.info("Work-" + track + " 增加屏障：" + node.task);
+//								Debug.info("Work-" + track + " 增加屏障：" + node.task);
 								_add1(node);
 							} else {
 //								Debug.info("Work-" + track + " 执行任务：" + event.task);
-//								System.out.println(node.task.toString());
 								eventBus.finishEvent(readerIndex);
 								return node;
 							}
 						} else {
-							Debug.info("Work-" + track + " 缓存任务：" + node.task);
+//							Debug.info("Work-" + track + " 缓存任务：" + node.task);
 							eventBus.finishEvent(readerIndex);
 							_add0(node);
 						}
@@ -421,6 +421,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 	}
 
+	private static final VarHandle VV = XUtils.findVarHandle(Node.class, "forbids", int.class);
+	;
+
 	public class Node implements Interceptor {
 
 		/**
@@ -440,7 +443,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		private Object[] fences = new Object[16];
 
 		@Contended
-		public final AtomicInteger forbids = new AtomicInteger();
+		private volatile int forbids;
 
 		/**
 		 * 任务位置
@@ -505,7 +508,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		@Override
 		public void init(int forbids) {
 			this.intercepted = true;
-			this.forbids.set(forbids);
+			this.forbids = forbids;
 		}
 
 		@Override
@@ -516,7 +519,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		@Override
 		@ForceInline
 		public boolean tryIntercept() {
-			return forbids.getAndDecrement() > 0;
+			int v;
+			do {
+				v = forbids;
+			} while (!VV.compareAndSet(this, v, v - 1));
+			return v > 0;
 		}
 
 		@Override
@@ -595,11 +602,6 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				weakUp(this);
 			}
 			this.bits = 0L;
-		}
-
-		@Override
-		public String toString() {
-			return task == null ? "null" : String.valueOf(((Task) task).value);
 		}
 	}
 }

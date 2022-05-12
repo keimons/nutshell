@@ -1,7 +1,7 @@
 package com.keimons.nutshell.explorer.internal;
 
 import com.keimons.nutshell.explorer.Debug;
-import com.keimons.nutshell.explorer.utils.CASUtils;
+import com.keimons.nutshell.explorer.utils.XUtils;
 import jdk.internal.vm.annotation.Contended;
 import jdk.internal.vm.annotation.ForceInline;
 
@@ -17,8 +17,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * @since 11
  **/
 public class BitsTrackEventBus<T> implements EventBus<T> {
-
-	private static final long OFFSET_WRITER_INDEX = CASUtils.objectFieldOffset(BitsTrackEventBus.class, "writerIndex");
 
 	private static final VarHandle AA = MethodHandles.arrayElementVarHandle(Object[].class);
 
@@ -89,10 +87,6 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 		}
 	}
 
-	private long setWriterIndex(long writerIndex) {
-		return CASUtils.casSet(this, OFFSET_WRITER_INDEX, writerIndex);
-	}
-
 	@Override
 	public T borrowEvent() {
 		for (; ; ) {
@@ -127,7 +121,7 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 				// recheck
 				if (writerIndex != this.writerIndex) {
 					// rollback state
-					node.setState(Node.STATE_FREE);
+					node.state = Node.STATE_FREE;
 					continue;
 				}
 				node.version = writerIndex;
@@ -179,11 +173,7 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 
 	private static class Node<T> {
 
-		private static final long STATE = CASUtils.objectFieldOffset(Node.class, "state");
-
-		private static final long EVENT = CASUtils.objectFieldOffset(Node.class, "event");
-
-		private static final long VERSION = CASUtils.objectFieldOffset(Node.class, "version");
+		private static final VarHandle II = XUtils.findVarHandle(Node.class, "state", int.class);
 
 		public static final int STATE_FREE = 0;
 
@@ -205,19 +195,7 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 		volatile long version;
 
 		public boolean casState(int expected, int newValue) {
-			return CASUtils.cas(this, STATE, expected, newValue);
-		}
-
-		public void setState(int state) {
-			CASUtils.casSet(this, STATE, state);
-		}
-
-		public void setEvent(Object event) {
-			CASUtils.casSet(this, EVENT, event);
-		}
-
-		public void setVersion(long version) {
-			CASUtils.casSet(this, VERSION, version);
+			return II.compareAndSet(this, expected, newValue);
 		}
 	}
 }

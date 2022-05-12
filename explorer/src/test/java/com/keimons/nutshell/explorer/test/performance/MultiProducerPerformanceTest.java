@@ -22,16 +22,38 @@ import java.util.concurrent.atomic.AtomicLong;
  **/
 public class MultiProducerPerformanceTest {
 
-	private static final int N_WRITER = 16;
+	/**
+	 * 生产者数量
+	 */
+	private static final int N_WRITER = 4;
 
-	private static final int N_READER = 8;
+	/**
+	 * 消费者数量
+	 */
+	private static final int N_READER = 2;
 
+	/**
+	 * Explorer执行key生成规则
+	 * <p>
+	 * 生成key：{@code index & MARK}。
+	 */
 	private static final int MARK = N_READER - 1;
 
+	/**
+	 * 任务数量
+	 */
 	private static final int TIMES = 1000_0000;
 
-	private static List<Runnable> tasks = new ArrayList<>(TIMES);
+	/**
+	 * 测试任务
+	 */
+	private static final List<Runnable> tasks = new ArrayList<>(TIMES);
 
+	/**
+	 * 初始化所有任务
+	 * <p>
+	 * 对于Executor来说，任务执行市场应该是相同的。但是对于Explorer来说，需要输出每个线程执行时长。
+	 */
 	@BeforeAll
 	public static void beforeTest() {
 		AtomicLong[] times = (AtomicLong[]) Array.newInstance(AtomicLong.class, N_READER);
@@ -49,6 +71,11 @@ public class MultiProducerPerformanceTest {
 		}
 	}
 
+	/**
+	 * 对比测试Executor执行效率
+	 *
+	 * @throws InterruptedException 线程中断异常
+	 */
 	@DisplayName("Executor测试")
 	@Test
 	public void testExecutor() throws InterruptedException {
@@ -65,18 +92,23 @@ public class MultiProducerPerformanceTest {
 		Thread.sleep(5000);
 	}
 
+	/**
+	 * Explorer执行效率
+	 *
+	 * @throws InterruptedException 线程中断异常
+	 */
 	@DisplayName("Explorer测试")
 	@Test
 	public void testExplorer() throws InterruptedException {
 		ReorderedExplorer explorer = new ReorderedExplorer(N_READER);
 		for (int i = 0; i < N_WRITER; i++) {
 			int start = i;
-			Thread thread0 = new Thread(() -> {
+			Thread thread = new Thread(() -> {
 				for (int j = start; j < tasks.size(); j += N_WRITER) {
 					explorer.execute(tasks.get(j), j & MARK);
 				}
 			});
-			thread0.start();
+			thread.start();
 		}
 		Thread.sleep(5000);
 	}

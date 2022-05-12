@@ -1,6 +1,5 @@
 package com.keimons.nutshell.explorer.test.performance;
 
-import com.keimons.nutshell.explorer.support.AbortPolicy;
 import com.keimons.nutshell.explorer.support.ReorderedExplorer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -22,13 +21,21 @@ import java.util.concurrent.atomic.AtomicLong;
 @DisplayName("单生产者单消费者性能测试")
 public class SingleProducerPerformanceTest {
 
-	static List<Runnable> tasks = new ArrayList<>(1000000);
+	/**
+	 * 任务数量
+	 */
+	private static final int TIMES = 1000_0000;
+
+	/**
+	 * 测试任务
+	 */
+	private static final List<Runnable> tasks = new ArrayList<>(TIMES);
 
 	@BeforeAll
 	public static void init() {
 		AtomicLong time = new AtomicLong();
 		tasks.add(() -> time.set(System.currentTimeMillis()));
-		for (int i = 0; i < 999998; i++) {
+		for (int i = 0; i < TIMES - 2; i++) {
 			int v = i;
 			tasks.add(new Runnable() {
 				@Override
@@ -41,30 +48,26 @@ public class SingleProducerPerformanceTest {
 				}
 			});
 		}
-		tasks.add(() -> {
-			System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get()));
-		});
+		tasks.add(() -> System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get())));
 	}
 
 	@DisplayName("Executor测试")
 	@Test
 	public void testExecutor() throws InterruptedException {
-		ExecutorService executor0 = Executors.newFixedThreadPool(1);
-		Thread.sleep(100);
-		for (int i = 0; i < tasks.size(); i++) {
-			executor0.execute(tasks.get(i));
+		ExecutorService executor = Executors.newFixedThreadPool(1);
+		for (int i = 0; i < TIMES; i++) {
+			executor.execute(tasks.get(i));
 		}
-		Thread.sleep(1000);
+		Thread.sleep(2000);
 	}
 
 	@DisplayName("Explorer测试")
 	@Test
 	public void testExplorer() throws InterruptedException {
-		ReorderedExplorer executor1 = new ReorderedExplorer("ReorderedTrackExecutor", 1, 1024, new AbortPolicy());
-		Thread.sleep(100);
-		for (int i = 0; i < tasks.size(); i++) {
-			executor1.execute(tasks.get(i), i & 0x1);
+		ReorderedExplorer explorer = new ReorderedExplorer(1);
+		for (int i = 0; i < TIMES; i++) {
+			explorer.execute(tasks.get(i), i & 0x1);
 		}
-		Thread.sleep(1000);
+		Thread.sleep(2000);
 	}
 }
