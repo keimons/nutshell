@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @since 11
  **/
 @DisplayName("单生产者单消费者性能测试")
-public class SingleProducerPerformanceTest {
+public class SingleProducerTest {
 
 	/**
 	 * 任务数量

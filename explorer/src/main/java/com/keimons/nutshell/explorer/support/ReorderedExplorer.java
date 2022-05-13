@@ -1,10 +1,11 @@
 package com.keimons.nutshell.explorer.support;
 
-import com.keimons.nutshell.explorer.*;
+import com.keimons.nutshell.explorer.AbstractExplorerService;
+import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
+import com.keimons.nutshell.explorer.TrackBarrier;
 import com.keimons.nutshell.explorer.internal.BitsTrackEventBus;
 import com.keimons.nutshell.explorer.utils.XUtils;
 import jdk.internal.vm.annotation.Contended;
-import jdk.internal.vm.annotation.ForceInline;
 
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.*;
@@ -75,6 +76,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 	public static final String DEFAULT_NAME = "ReorderedExplorer";
 
+	public static final VarHandle BB = XUtils.findVarHandle(ReorderedTrackWorker.class, "parked", boolean.class);
+
 	/**
 	 * 事件总线
 	 * <p>
@@ -93,7 +96,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 	public ReorderedExplorer(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler, ThreadFactory threadFactory) {
 		super(name, nThreads, rejectedHandler, threadFactory);
-		eventBus = new BitsTrackEventBus<>(Node::new, capacity, nThreads);
+		eventBus = new BitsTrackEventBus<>(capacity, nThreads);
 		executors = new ReorderedTrackWorker[nThreads];
 		for (int i = 0; i < nThreads; i++) {
 			ReorderedTrackWorker executor = new ReorderedTrackWorker(i, threadFactory);
@@ -115,50 +118,29 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 	}
 
-	/**
-	 * 根据节点唤醒线程
-	 *
-	 * @param node 节点
-	 */
-	private void weakUp(Node node) {
-		for (int i = 0; i < nThreads; i++) {
-			if (node.isTrack(i)) {
-				ReorderedTrackWorker worker = executors[i];
-				if (worker.parked) {
-					worker.parked = false;
-					LockSupport.unpark(worker.thread);
-				}
-			}
-		}
-	}
-
 	@Override
 	public void execute(Runnable task, Object fence) {
-		Node node = eventBus.borrowEvent();
-		node.init(task, fence);
+		Node node = new Node1(task, fence);
 		eventBus.publishEvent(node);
-		weakUp(fence.hashCode() % nThreads);
+		node.weakUpAll();
 	}
 
 	public void execute(Runnable task, Object fence0, Object fence1) {
-		Node node = eventBus.borrowEvent();
-		node.init(task, fence0, fence1);
+		Node node = new Node2(task, fence0, fence1);
 		eventBus.publishEvent(node);
-		weakUp(node);
+		node.weakUpAll();
 	}
 
 	public void execute(Runnable task, Object fence0, Object fence1, Object fence2) {
-		Node node = eventBus.borrowEvent();
-		node.init(task, fence0, fence1, fence2);
+		AbstractNode node = new Node3(task, fence0, fence1, fence2);
 		eventBus.publishEvent(node);
-		weakUp(node);
+		node.weakUpAll();
 	}
 
 	public void execute(Runnable task, Object... fences) {
-		Node node = eventBus.borrowEvent();
-		node.init(task, fences);
+		AbstractNode node = new NodeX(task, fences);
 		eventBus.publishEvent(node);
-		weakUp(node);
+		node.weakUpAll();
 	}
 
 	@Override
@@ -316,16 +298,14 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			for (int i = index, limit = interceptIndex - 1; i < limit; i++) {
 				intercepted[i] = intercepted[i + 1];
 			}
-			intercepted[interceptIndex] = null;
-			interceptIndex--;
+			intercepted[--interceptIndex] = null;
 		}
 
 		private void _remove1(int index) {
 			for (int i = index, limit = barrierIndex - 1; i < limit; i++) {
 				barriers[i] = barriers[i + 1];
 			}
-			barriers[barrierIndex] = null;
-			barrierIndex--;
+			barriers[--barrierIndex] = null;
 		}
 
 		private boolean isReorder(Node node) {
@@ -343,19 +323,24 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				for (int i = 0; i < barrierIndex; i++) {
 					Node node = barriers[i];
 					if (!node.isIntercepted()) {
-//						Debug.info("Work-" + track + " 移除屏障：" + node);
+//						Debug.info("Work-" + track + " 移除屏障：" + node.getTask());
 						_remove1(i);
 					}
 				}
 				for (int i = 0; i < interceptIndex; i++) {
 					Node node = intercepted[i];
 					if (isReorder(node)) {
+						// 这个任务已经可以执行了，所以，直接移除
+						_remove0(i);
 						if (node.tryIntercept()) {
-//							Debug.info("Work-" + track + " 恢复屏障：" + node.task);
+//							Debug.info("Work-" + track + " 恢复屏障：" + node.getTask());
 							_add1(node);
+							node.weakUpAll();
 						} else {
-//							Debug.info("Work-" + track + " 恢复任务：" + node.task);
-							_remove0(i);
+//							Debug.info("Work-" + track + " 恢复任务：" + node.getTask());
+							if (!node.isSingle()) {
+								eventBus.finishEvent(node.getIndex());
+							}
 							return node;
 						}
 					}
@@ -371,16 +356,19 @@ public class ReorderedExplorer extends AbstractExplorerService {
 						if (isReorder(node)) {
 							if (node.tryIntercept()) {
 								// only execute thread return event
-//								Debug.info("Work-" + track + " 增加屏障：" + node.task);
+//								Debug.info("Work-" + track + " 增加屏障：" + node.getTask());
 								_add1(node);
 							} else {
-//								Debug.info("Work-" + track + " 执行任务：" + node.task);
+//								Debug.info("Work-" + track + " 执行任务：" + node.getTask());
 								eventBus.finishEvent(readerIndex);
 								return node;
 							}
 						} else {
-//							Debug.info("Work-" + track + " 缓存任务：" + node.task);
-							eventBus.finishEvent(readerIndex);
+//							Debug.info("Work-" + track + " 缓存任务：" + node.getTask());
+							if (node.isSingle()) {
+								eventBus.finishEvent(readerIndex);
+							}
+							node.setIndex(readerIndex);
 							_add0(node);
 						}
 					}
@@ -407,9 +395,13 @@ public class ReorderedExplorer extends AbstractExplorerService {
 							node = next();
 							if (node == null) {
 								parked = true;
-								LockSupport.park();
-							} else {
-								node.task.run();
+								node = next();
+								if (node == null) {
+									LockSupport.park();
+								}
+							}
+							if (node != null) {
+								node.getTask().run();
 							}
 						} catch (Throwable e) {
 							// ignore
@@ -417,7 +409,6 @@ public class ReorderedExplorer extends AbstractExplorerService {
 						} finally {
 							if (node != null) {
 								node.release(track);
-								eventBus.returnEvent(node);
 							}
 						}
 					}
@@ -434,103 +425,91 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 	}
 
-	private static final VarHandle VV = XUtils.findVarHandle(Node.class, "forbids", int.class);
-	;
+	private static final VarHandle VV = XUtils.findVarHandle(AbstractNode.class, "forbids", int.class);
 
-	public class Node implements Interceptor {
+	public interface Node {
+
+		void setIndex(long index);
+
+		long getIndex();
+
+		Runnable getTask();
+
+		int getFenceCount();
+
+		boolean tryIntercept();
+
+		boolean isIntercepted();
+
+		boolean isTrack(long bits);
 
 		/**
-		 * 轨道数量（最大不超过64）
-		 * <p>
-		 * 它就像操场上的跑道，共有{@code nTracks}条轨道，每个线程仅仅跑在自己的轨道上。
+		 * 判断节点是否该轨道上
+		 *
+		 * @param track 轨道
+		 * @return 是否在当前轨道
 		 */
-		private final int nTracks;
+		boolean isTrack(int track);
 
-		private int capacity = 16;
+		boolean isSingle();
 
-		private int writerIndex;
+		void weakUpAll();
+
+		boolean isReorder(Node other);
 
 		/**
-		 * 屏障
+		 * 释放节点
+		 *
+		 * @param track 执行任务的轨道
 		 */
-		private Object[] fences = new Object[16];
+		void release(int track);
+	}
 
-		@Contended
-		private volatile int forbids;
+	public abstract static class AbstractNode implements Node {
 
 		/**
 		 * 任务位置
 		 * <p>
-		 * 共有{@link #nTracks}条轨道，当前任务所处的轨道位置（可能不止一个）。轨道数量不超过64，所以使用{@code bits}存储。
+		 * 共有{@link #nThreads}条轨道，当前任务所处的轨道位置（可能不止一个）。轨道数量不超过64，所以使用{@code bits}存储。
 		 */
-		private long bits;
+		protected long bits;
 
-		protected volatile boolean intercepted;
+		protected final int nParams;
 
-		public Runnable task;
+		protected final Runnable task;
 
-		public Node() {
-			if (nThreads > 64) {
-				throw new IllegalArgumentException("nTracks must not more than 64");
-			}
-			this.nTracks = nThreads;
-		}
+		long index;
 
-		private void init0(Object fence) {
-			int hashcode = fence.hashCode();
-			int track = hashcode % nTracks;
-			bits |= (1L << track);
-			if (writerIndex >= capacity) {
-				capacity <<= 1;
-				Object[] tmp = new Object[capacity];
-				System.arraycopy(fences, 0, tmp, 0, writerIndex);
-				fences = tmp;
-			}
-			fences[writerIndex++] = fence;
-		}
+		@Contended
+		protected volatile int forbids;
 
-		public void init(Object fence) {
-			init0(fence);
-			init(Long.bitCount(bits) - 1);
-		}
+		protected volatile boolean intercepted = true;
 
-		public void init(Object fence0, Object fence1) {
-			init0(fence0);
-			init0(fence1);
-			init(Long.bitCount(bits) - 1);
-		}
-
-		public void init(Object fence0, Object fence1, Object fence2) {
-			init0(fence0);
-			init0(fence1);
-			init0(fence2);
-			init(Long.bitCount(bits) - 1);
-		}
-
-		public void init(Object... fences) {
-			if (fences.length == 0) {
-				throw new IllegalArgumentException("no keys");
-			}
-			for (int i = 0, length = fences.length; i < length; i++) {
-				Object key = fences[i];
-				init0(key);
-			}
-			init(Long.bitCount(bits) - 1);
+		protected AbstractNode(Runnable task, int nParams) {
+			this.nParams = nParams;
+			this.task = task;
 		}
 
 		@Override
-		public void init(int forbids) {
-			this.intercepted = true;
-			this.forbids = forbids;
+		public long getIndex() {
+			return index;
 		}
 
 		@Override
-		public boolean intercept() {
-			throw new UnsupportedOperationException();
+		public void setIndex(long index) {
+			this.index = index;
 		}
 
 		@Override
-		@ForceInline
+		public Runnable getTask() {
+			return task;
+		}
+
+		@Override
+		public int getFenceCount() {
+			return nParams;
+		}
+
 		public boolean tryIntercept() {
 			int v;
 			do {
@@ -539,38 +518,12 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			return v > 0;
 		}
 
-		@Override
-		public void setIntercepted(boolean intercepted) {
-			this.intercepted = intercepted;
-		}
-
-		@Override
 		public boolean isIntercepted() {
 			return intercepted;
 		}
 
 		public boolean isTrack(long bits) {
 			return (this.bits & bits) != 0;
-		}
-
-		/**
-		 * 判断另一个节点是否能越过当前节点执行
-		 *
-		 * @param other 后续节点
-		 * @return {@code true}可以越过当前栅栏，{@code false}不能越过当前栅栏
-		 */
-		public boolean isReorder(Node other) {
-			// 设计考虑到key的数量有限，所以直接使用双循环判断
-			// 优先循环后续节点，因为很有可能只有一个key。
-			for (int i = 0; i < other.writerIndex; i++) {
-				Object fence = other.fences[i];
-				for (int j = 0; j < this.writerIndex; j++) {
-					if (this.fences[j].equals(fence)) {
-						return false;
-					}
-				}
-			}
-			return true;
 		}
 
 		/**
@@ -583,46 +536,378 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			return (bits & 1L << track) != 0;
 		}
 
+		@Override
+		public boolean isSingle() {
+			return Long.bitCount(bits) <= 1;
+		}
+
+		public abstract void weakUpAll();
+
+		public abstract boolean isReorder(Node other);
+
 		/**
-		 * 已废弃，节点释放时直接释放锁
+		 * 释放节点
 		 *
-		 * @see #release(int) 释放锁
+		 * @param track 执行任务的轨道
+		 */
+		public abstract void release(int track);
+	}
+
+	public class Node1 implements Node {
+
+		protected final Runnable task;
+
+		private final Object fence;
+
+		private final int track;
+
+		long index;
+
+		public Node1(Runnable task, Object fence) {
+			this.task = task;
+			this.track = fence.hashCode() % nThreads;
+			this.fence = fence;
+		}
+
+		@Override
+		public void setIndex(long index) {
+			this.index = index;
+		}
+
+		@Override
+		public long getIndex() {
+			return index;
+		}
+
+		@Override
+		public Runnable getTask() {
+			return task;
+		}
+
+		@Override
+		public int getFenceCount() {
+			return 0;
+		}
+
+		@Override
+		public boolean tryIntercept() {
+			// must false
+			return false;
+		}
+
+		@Override
+		public boolean isIntercepted() {
+			return false;
+		}
+
+		@Override
+		public boolean isTrack(long bits) {
+			return ((1L << track) & bits) != 0;
+		}
+
+		@Override
+		public boolean isTrack(int track) {
+			return false;
+		}
+
+		@Override
+		public boolean isSingle() {
+			return true;
+		}
+
+		@Override
+		public void weakUpAll() {
+			weakUp(track);
+		}
+
+		/**
+		 * 判断另一个节点是否能越过当前节点执行
+		 *
+		 * @param other 后续节点
+		 * @return {@code true}可以越过当前栅栏，{@code false}不能越过当前栅栏
 		 */
 		@Override
-		@Deprecated
-		public void release() {
-			throw new UnsupportedOperationException();
-		}
-
-		public void init(Runnable task, Object fence) {
-			this.task = task;
-			this.init(fence);
-		}
-
-		public void init(Runnable task, Object fence0, Object fence1) {
-			this.task = task;
-			this.init(fence0, fence1);
-		}
-
-		public void init(Runnable task, Object fence0, Object fence1, Object fence2) {
-			this.task = task;
-			this.init(fence0, fence1, fence2);
-		}
-
-		public void init(Runnable task, Object... fences) {
-			this.task = task;
-			this.init(fences);
-		}
-
-		public void release(int track) {
-			this.task = null;
-			this.writerIndex = 0;
-			this.intercepted = false;
-			if (bits != 1L << track) {
-				// 唤醒其它线程
-				weakUp(this);
+		public boolean isReorder(Node other) {
+			switch (other.getFenceCount()) {
+				case 1: {
+					throw new IllegalStateException();
+				}
+				case 2: {
+					Node2 node2 = (Node2) other;
+					return !(node2.fence0.equals(fence) || node2.fence1.equals(fence));
+				}
+				case 3: {
+					Node3 node3 = (Node3) other;
+					return !(node3.fence0.equals(fence) || node3.fence1.equals(fence) || node3.fence2.equals(fence));
+				}
+				default: {
+					NodeX nodeX = (NodeX) other;
+					for (int i = 0, count = nodeX.nParams; i < count; i++) {
+						Object v = nodeX.fences[i];
+						if (v.equals(fence)) {
+							return false;
+						}
+					}
+					return true;
+				}
 			}
-			this.bits = 0L;
+		}
+
+		@Override
+		public void release(int track) {
+			// do nothing
+		}
+	}
+
+	public class Node2 extends AbstractNode {
+
+		private final int track1;
+
+		private final Object fence0;
+
+		private final int track2;
+
+		private final Object fence1;
+
+		public Node2(Runnable task, Object fence0, Object fence1) {
+			super(task, 2);
+			this.track1 = fence0.hashCode() % nThreads;
+			this.track2 = fence1.hashCode() % nThreads;
+			this.fence0 = fence0;
+			this.fence1 = fence1;
+			this.bits = (1L << this.track1) | (1L << (this.track2));
+			this.forbids = track1 == track2 ? 0 : 1;
+		}
+
+		@Override
+		public void weakUpAll() {
+			weakUp(track1);
+			weakUp(track2);
+		}
+
+		/**
+		 * 判断另一个节点是否能越过当前节点执行
+		 *
+		 * @param other 后续节点
+		 * @return {@code true}可以越过当前栅栏，{@code false}不能越过当前栅栏
+		 */
+		@Override
+		public boolean isReorder(Node other) {
+			switch (other.getFenceCount()) {
+				case 1: {
+					throw new IllegalStateException();
+				}
+				case 2: {
+					Node2 node2 = (Node2) other;
+					return !(node2.fence0.equals(fence0) || node2.fence0.equals(fence1) || node2.fence1.equals(fence0) || node2.fence1.equals(fence1));
+				}
+				case 3: {
+					Node3 node3 = (Node3) other;
+					return !(node3.fence0.equals(fence0) ||
+							node3.fence0.equals(fence1) ||
+							node3.fence1.equals(fence0) ||
+							node3.fence1.equals(fence1) ||
+							node3.fence2.equals(fence0) ||
+							node3.fence2.equals(fence1));
+				}
+				default: {
+					NodeX nodeX = (NodeX) other;
+					for (int i = 0, count = nodeX.nParams; i < count; i++) {
+						Object v = nodeX.fences[i];
+						if (v.equals(fence0) || v.equals(fence1)) {
+							return false;
+						}
+					}
+					return true;
+				}
+			}
+		}
+
+		@Override
+		public void release(int track) {
+			intercepted = false;
+			if (track != track1) {
+				weakUp(track1);
+			}
+			if (track != track2) {
+				weakUp(track2);
+			}
+		}
+	}
+
+	public class Node3 extends AbstractNode {
+
+		private final int track1;
+
+		private final Object fence0;
+
+		private final int track2;
+
+		private final Object fence1;
+
+		private final int track3;
+
+		private final Object fence2;
+
+		public Node3(Runnable task, Object fence0, Object fence1, Object fence2) {
+			super(task, 3);
+			this.track1 = fence0.hashCode() % nThreads;
+			this.track2 = fence1.hashCode() % nThreads;
+			this.track3 = fence2.hashCode() % nThreads;
+			this.fence0 = fence0;
+			this.fence1 = fence1;
+			this.fence2 = fence2;
+			this.bits = (1L << this.track1) | (1L << (this.track2)) | (1L << (this.track3));
+			if (this.track1 == this.track2 && this.track1 == this.track3) {
+				this.forbids = 0;
+			} else if (this.track1 == this.track2 || this.track1 == this.track3 || this.track2 == this.track3) {
+				this.forbids = 1;
+			} else {
+				this.forbids = 2;
+			}
+		}
+
+		@Override
+		public void weakUpAll() {
+			weakUp(track1);
+			weakUp(track2);
+			weakUp(track3);
+		}
+
+		/**
+		 * 判断另一个节点是否能越过当前节点执行
+		 *
+		 * @param other 后续节点
+		 * @return {@code true}可以越过当前栅栏，{@code false}不能越过当前栅栏
+		 */
+		@Override
+		public boolean isReorder(Node other) {
+			switch (other.getFenceCount()) {
+				case 1: {
+					throw new IllegalStateException();
+				}
+				case 2: {
+					Node2 node2 = (Node2) other;
+					return !(node2.fence0.equals(fence0) || node2.fence0.equals(fence1) || node2.fence0.equals(fence2) ||
+							node2.fence1.equals(fence0) || node2.fence1.equals(fence1) || node2.fence1.equals(fence2));
+				}
+				case 3: {
+					Node3 node3 = (Node3) other;
+					return !(node3.fence0.equals(fence0) ||
+							node3.fence0.equals(fence1) ||
+							node3.fence0.equals(fence2) ||
+							node3.fence1.equals(fence0) ||
+							node3.fence1.equals(fence1) ||
+							node3.fence1.equals(fence2) ||
+							node3.fence2.equals(fence0) ||
+							node3.fence2.equals(fence1) ||
+							node3.fence2.equals(fence2));
+				}
+				default: {
+					NodeX nodeX = (NodeX) other;
+					for (int i = 0, count = nodeX.nParams; i < count; i++) {
+						Object v = nodeX.fences[i];
+						if (v.equals(fence0) || v.equals(fence1) || v.equals(fence2)) {
+							return false;
+						}
+					}
+					return true;
+				}
+			}
+		}
+
+		@Override
+		public void release(int track) {
+			intercepted = false;
+			if (track != track1) {
+				weakUp(track1);
+			}
+			if (track != track2) {
+				weakUp(track2);
+			}
+			if (track != track3) {
+				weakUp(track3);
+			}
+		}
+	}
+
+	public class NodeX extends AbstractNode {
+
+		private final Object[] fences;
+
+		public NodeX(Runnable task, Object... fences) {
+			super(task, fences.length);
+			this.fences = fences;
+			for (int i = 0; i < nParams; i++) {
+				this.bits |= (1L << fences[i].hashCode() % nThreads);
+			}
+			this.forbids = Long.bitCount(bits) - 1;
+		}
+
+		@Override
+		public void weakUpAll() {
+			for (int i = 0; i < nThreads; i++) {
+				if (isTrack(i)) {
+					weakUp(i);
+				}
+			}
+		}
+
+		/**
+		 * 判断另一个节点是否能越过当前节点执行
+		 *
+		 * @param other 后续节点
+		 * @return {@code true}可以越过当前栅栏，{@code false}不能越过当前栅栏
+		 */
+		@Override
+		public boolean isReorder(Node other) {
+			switch (other.getFenceCount()) {
+				case 1: {
+					throw new IllegalStateException();
+				}
+				case 2: {
+					Node2 node = (Node2) other;
+					for (int i = 0; i < nParams; i++) {
+						Object fence = fences[i];
+						if (fence.equals(node.fence0) || fence.equals(node.fence1)) {
+							return false;
+						}
+					}
+					return true;
+				}
+				case 3: {
+					Node3 node = (Node3) other;
+					for (int i = 0; i < nParams; i++) {
+						Object fence = fences[i];
+						if (fence.equals(node.fence0) || fence.equals(node.fence1) || fence.equals(node.fence2)) {
+							return false;
+						}
+					}
+					return true;
+				}
+				default: {
+					NodeX node = (NodeX) other;
+					for (int i = 0, count = node.nParams; i < count; i++) {
+						Object v = node.fences[i];
+						for (int j = 0; j < nParams; j++) {
+							if (v.equals(fences[j])) {
+								return false;
+							}
+						}
+					}
+					return true;
+				}
+			}
+		}
+
+		@Override
+		public void release(int track) {
+			intercepted = false;
+			for (int i = 0; i < nThreads; i++) {
+				if (isTrack(i)) {
+					weakUp(i);
+				}
+			}
 		}
 	}
 }

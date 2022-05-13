@@ -15,12 +15,12 @@ public class EventBusTest {
 
 	@Test
 	public void test() {
-		EventBus<Object> eventBus = new BitsTrackEventBus<>(Object::new, 1, 2);
-		for (int i = 0; i < 3; i++) {
-			eventBus.borrowEvent();
-		}
-		for (int i = 0; i < 3; i++) {
-			eventBus.returnEvent(new Object());
-		}
+//		EventBus<Object> eventBus = new BitsTrackEventBus<>(Object::new, 1, 2);
+//		for (int i = 0; i < 3; i++) {
+//			eventBus.borrowEvent();
+//		}
+//		for (int i = 0; i < 3; i++) {
+//			eventBus.returnEvent(new Object());
+//		}
 	}
 }

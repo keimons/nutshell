@@ -7,6 +7,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -23,7 +25,7 @@ public class ReorderTest {
 
 	private static final int THREAD = 4;
 
-	private static final int BARRIER = 0;
+	private static final int BARRIER = 100;
 
 	/**
 	 * 测试次数
@@ -37,7 +39,7 @@ public class ReorderTest {
 
 	@DisplayName("重排序任务性能测试")
 	@Test
-	public void test() throws InterruptedException {
+	public void test() throws InterruptedException, ExecutionException {
 		ReorderedExplorer explorer = new ReorderedExplorer(ReorderedExplorer.DEFAULT_NAME,
 				THREAD,
 				THREAD * ReorderedExplorer.DEFAULT_THREAD_CAPACITY,
@@ -57,8 +59,8 @@ public class ReorderTest {
 				}
 			}, 0, 1);
 		} else {
-			ready.set(true);
 			busy.set(0);
+			ready.set(true);
 		}
 		for (; ; ) {
 			if (ready.get()) {
@@ -70,20 +72,43 @@ public class ReorderTest {
 				// 已初始化100个屏障，开始越过屏障性能测试
 				AtomicLong time = new AtomicLong();
 				explorer.execute(() -> time.set(System.currentTimeMillis()), mark + THREAD);
-				for (int i = 0; i < COUNT - 2; i++) {
+				for (int i = 0; i < COUNT; i++) {
 					explorer.execute(() -> {
-					}, mark + THREAD << 2);
+					}, mark + (THREAD << 2));
 				}
-				explorer.execute(() -> System.out.println(Thread.currentThread() + "Thread: " + (System.currentTimeMillis() - time.get())), mark + THREAD);
+				Future<?> future = explorer.submit(() -> System.out.println(Thread.currentThread() + "Thread: " + (System.currentTimeMillis() - time.get())), mark + THREAD);
+				future.get();
 				break;
 			}
 		}
-		Thread.sleep(10000);
+	}
+
+	@DisplayName("双线程完全重排序任务测试")
+	@Test
+	public void testOrder() throws InterruptedException, ExecutionException {
+		AtomicInteger LOCAL = new AtomicInteger(-1);
+		ReorderedExplorer explorer = new ReorderedExplorer(2);
+		AtomicLong time = new AtomicLong();
+		explorer.execute(() -> time.set(System.currentTimeMillis()), 0);
+		for (int i = 0; i < COUNT; i++) {
+			final int value = i;
+			explorer.execute(() -> {
+				if (value - LOCAL.get() != 1) {
+					throw new Error("Test failed.");
+				} else {
+					LOCAL.set(value);
+				}
+			}, 0);
+		}
+		Future<?> future = explorer.submit(() -> System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get())), 0);
+		System.out.println("Submitted.");
+		future.get();
 	}
 
 	private static class IndexThreadFactory implements ThreadFactory {
-		private static final AtomicInteger poolNumber = new AtomicInteger(1);
+
 		private final ThreadGroup group;
+
 		private final AtomicInteger Index = new AtomicInteger(0);
 
 		public IndexThreadFactory() {

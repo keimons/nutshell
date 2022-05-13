@@ -20,17 +20,17 @@ import java.util.concurrent.atomic.AtomicLong;
  * @version 1.0
  * @since 11
  **/
-public class MultiProducerPerformanceTest {
+public class MultiProducerTest {
 
 	/**
 	 * 生产者数量
 	 */
-	private static final int N_WRITER = 4;
+	private static final int N_WRITER = 1;
 
 	/**
 	 * 消费者数量
 	 */
-	private static final int N_READER = 2;
+	private static final int N_READER = 1;
 
 	/**
 	 * Explorer执行key生成规则
@@ -83,7 +83,7 @@ public class MultiProducerPerformanceTest {
 		for (int i = 0; i < N_WRITER; i++) {
 			int start = i;
 			Thread thread = new Thread(() -> {
-				for (int j = start; j < tasks.size(); j += N_WRITER) {
+				for (int j = start; j < TIMES; j += N_WRITER) {
 					executor.execute(tasks.get(j));
 				}
 			});
@@ -104,7 +104,7 @@ public class MultiProducerPerformanceTest {
 		for (int i = 0; i < N_WRITER; i++) {
 			int start = i;
 			Thread thread = new Thread(() -> {
-				for (int j = start; j < tasks.size(); j += N_WRITER) {
+				for (int j = start; j < TIMES; j += N_WRITER) {
 					explorer.execute(tasks.get(j), j & MARK);
 				}
 			});

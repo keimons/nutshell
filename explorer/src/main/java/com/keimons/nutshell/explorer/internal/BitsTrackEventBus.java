@@ -20,7 +20,7 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 
 	private static final VarHandle AA = MethodHandles.arrayElementVarHandle(Object[].class);
 
-	final EventFactory<T> factory;
+	final EventFactory<T> factory = null;
 
 	final int nThreads;
 
@@ -67,9 +67,8 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 	AtomicLong adder = new AtomicLong();
 
 	@SuppressWarnings("unchecked")
-	public BitsTrackEventBus(EventFactory<T> factory, int capacity, int nThreads) {
+	public BitsTrackEventBus(int capacity, int nThreads) {
 		this.nThreads = nThreads;
-		this.factory = factory;
 		this.capacity = capacity;
 		this.writerMark = capacity - 1;
 		this.readerMark = (capacity << 1) - 1;
@@ -79,9 +78,9 @@ public class BitsTrackEventBus<T> implements EventBus<T> {
 	}
 
 	private void fill() {
-		for (int i = 0, length = capacity << 1; i < length; i++) {
-			_buffer[i] = factory.newInstance();
-		}
+//		for (int i = 0, length = capacity << 1; i < length; i++) {
+//			_buffer[i] = factory.newInstance();
+//		}
 		for (int i = 0; i < capacity; i++) {
 			this.buffer[i] = new Node<>();
 		}
