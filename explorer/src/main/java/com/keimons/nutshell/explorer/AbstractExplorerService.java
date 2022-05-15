@@ -13,10 +13,15 @@ import java.util.concurrent.ThreadFactory;
  */
 public abstract class AbstractExplorerService implements ExplorerService {
 
+	/**
+	 * 默认被拒绝任务的处理策略
+	 * <p>
+	 * 当消息队列已满时，如果继续向队列中写入任务，则调用执行此异常。
+	 */
 	public static final RejectedTrackExecutionHandler DefaultRejectedHandler = new AbortPolicy();
 
 	/**
-	 * 策略名称
+	 * 线程池名称
 	 */
 	protected final String name;
 
@@ -24,20 +29,27 @@ public abstract class AbstractExplorerService implements ExplorerService {
 	 * 线程数量
 	 */
 	protected final int nThreads;
+
 	/**
 	 * 被拒绝执行的任务处理句柄
 	 */
 	protected final RejectedTrackExecutionHandler rejectedHandler;
+
 	/**
 	 * 是否阻塞调用者线程
 	 * <p>
 	 * 当队列没有足够空间时，是否阻塞调用者线程。
 	 */
 	protected final boolean blockingCaller;
+
 	/**
 	 * 线程工厂
 	 */
 	protected final ThreadFactory threadFactory;
+
+	/**
+	 * 线程池是否运行中
+	 */
 	protected volatile boolean running = true;
 
 	/**

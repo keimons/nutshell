@@ -2,7 +2,6 @@ package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.AbstractExplorerService;
 import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
-import com.keimons.nutshell.explorer.TrackBarrier;
 
 import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
@@ -41,11 +40,11 @@ public class QueueExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public void executeNow(Runnable task, TrackBarrier barrier) {
+	public void executeNow(Runnable task, Object fence) {
 		if (!running) {
-			rejectedHandler.rejectedExecution(barrier, task, this);
+			rejectedHandler.rejectedExecution(fence, task, this);
 		}
-		executors[barrier.hashes()[0] % nThreads].executeNow(task, barrier);
+		executors[fence.hashCode() % nThreads].executeNow(task, fence);
 	}
 
 	@Override
@@ -56,23 +55,23 @@ public class QueueExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public Future<?> submitNow(Runnable task, TrackBarrier barrier) {
+	public Future<?> submitNow(Runnable task, Object fence) {
 		RunnableFuture<Void> future = new FutureTask<>(task, null);
-		executeNow(future, barrier);
+		executeNow(future, fence);
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submit(Callable<T> task, TrackBarrier barrier) {
+	public <T> Future<T> submit(Callable<T> task, Object fence) {
 		FutureTask<T> future = new FutureTask<>(task);
-		execute(future, barrier);
+		execute(future, fence);
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submitNow(Callable<T> task, TrackBarrier barrier) {
+	public <T> Future<T> submitNow(Callable<T> task, Object fence) {
 		FutureTask<T> future = new FutureTask<>(task);
-		executeNow(future, barrier);
+		executeNow(future, fence);
 		return future;
 	}
 

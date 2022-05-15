@@ -3,7 +3,7 @@ package com.keimons.nutshell.explorer.support;
 import com.keimons.nutshell.explorer.AbstractExplorerService;
 import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
 import com.keimons.nutshell.explorer.TrackBarrier;
-import com.keimons.nutshell.explorer.internal.BitsTrackEventBus;
+import com.keimons.nutshell.explorer.internal.DefaultEventBus;
 import com.keimons.nutshell.explorer.utils.XUtils;
 import jdk.internal.vm.annotation.Contended;
 
@@ -72,18 +72,24 @@ import java.util.concurrent.locks.LockSupport;
  **/
 public class ReorderedExplorer extends AbstractExplorerService {
 
+	/**
+	 * 默认线程队列长度
+	 * <p>
+	 * 为每个线程分配1024的队列。例如，8个线程的线程池，则队列总长度为{@code 8 * 1024 = 8192}的队列长度。
+	 */
 	public static final int DEFAULT_THREAD_CAPACITY = 1024;
 
+	/**
+	 * 默认线程池名称
+	 */
 	public static final String DEFAULT_NAME = "ReorderedExplorer";
-
-	public static final VarHandle BB = XUtils.findVarHandle(ReorderedTrackWorker.class, "parked", boolean.class);
 
 	/**
 	 * 事件总线
 	 * <p>
 	 * 所有任务都发布在事件总线上，如果事件总线不能发布任务，任务发布失败，则队列已满。
 	 */
-	private final BitsTrackEventBus<Node> eventBus;
+	private final DefaultEventBus<Node> eventBus;
 
 	/**
 	 * 任务执行器
@@ -96,7 +102,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 	public ReorderedExplorer(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler, ThreadFactory threadFactory) {
 		super(name, nThreads, rejectedHandler, threadFactory);
-		eventBus = new BitsTrackEventBus<>(capacity, nThreads);
+		eventBus = new DefaultEventBus<>(capacity);
 		executors = new ReorderedTrackWorker[nThreads];
 		for (int i = 0; i < nThreads; i++) {
 			ReorderedTrackWorker executor = new ReorderedTrackWorker(i, threadFactory);
@@ -157,9 +163,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public <T> Future<T> submit(Callable<T> task, TrackBarrier barrier) {
+	public <T> Future<T> submit(Callable<T> task, Object fence) {
 		FutureTask<T> future = new FutureTask<>(task);
-		execute(future, barrier);
+		execute(future, fence);
 		return future;
 	}
 

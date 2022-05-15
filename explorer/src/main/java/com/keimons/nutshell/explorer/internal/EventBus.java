@@ -21,19 +21,28 @@ import jdk.internal.vm.annotation.ForceInline;
  **/
 public interface EventBus<T> {
 
+	/**
+	 * 获取写入位置
+	 *
+	 * @return 写入位置
+	 */
 	@ForceInline
 	long writerIndex();
 
 	/**
-	 * 借用事件对象
-	 * <p>
-	 * 如果要在{@link EventBus}中发布事件，需要先拿到事件对象，然后再发布事件。
+	 * 发布一个事件
 	 *
-	 * @return 事件对象
+	 * @param event 事件
 	 */
-	T borrowEvent();
-
 	void publishEvent(T event);
+
+	/**
+	 * 根据位置索引获取一个事件
+	 *
+	 * @param index 位置索引
+	 * @return 该位置所存储的事件
+	 */
+	T getEvent(long index);
 
 	/**
 	 * 完成事件
@@ -41,13 +50,4 @@ public interface EventBus<T> {
 	 * @param index 事件索引
 	 */
 	void finishEvent(long index);
-
-	T getEvent(long index);
-
-	/**
-	 * 归还事件对象
-	 *
-	 * @param event 对象位置
-	 */
-	void returnEvent(T event);
 }

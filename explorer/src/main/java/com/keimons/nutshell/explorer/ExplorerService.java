@@ -86,11 +86,11 @@ public interface ExplorerService {
 	 * 将提交的任务置于队首，尽可能的立即执行，但是并不能保证会被立即执行。
 	 * 多线程情况下，即便是置于队首的任务，也有可能在执行之前，被其它任务挤占。
 	 *
-	 * @param task    任务
-	 * @param barrier 执行屏障
+	 * @param task  任务
+	 * @param fence 执行屏障
 	 * @throws UnsupportedOperationException 部分实现可能不支持此操作
 	 */
-	default void executeNow(Runnable task, TrackBarrier barrier) {
+	default void executeNow(Runnable task, Object fence) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -111,24 +111,24 @@ public interface ExplorerService {
 	 * 将提交的任务置于队首，尽可能的立即执行，但是并不能保证会被立即执行。
 	 * 多线程情况下，即便是置于队首的任务，也有可能在执行之前，被其它任务挤占。
 	 *
-	 * @param task    任务
-	 * @param barrier 执行屏障
+	 * @param task  任务
+	 * @param fence 执行屏障
 	 * @return 待完成任务的异步计算的结果
 	 * @throws UnsupportedOperationException 部分实现可能不支持此操作
 	 */
-	default Future<?> submitNow(Runnable task, TrackBarrier barrier) {
+	default Future<?> submitNow(Runnable task, Object fence) {
 		throw new UnsupportedOperationException();
 	}
 
 	/**
 	 * 提交任务
 	 *
-	 * @param <T>     返回值类型
-	 * @param task    任务
-	 * @param barrier 执行屏障
+	 * @param <T>   返回值类型
+	 * @param task  任务
+	 * @param fence 执行屏障
 	 * @return 待完成任务的异步计算的结果
 	 */
-	<T> Future<T> submit(Callable<T> task, TrackBarrier barrier);
+	<T> Future<T> submit(Callable<T> task, Object fence);
 
 	/**
 	 * 提交任务（立即执行）
@@ -136,13 +136,13 @@ public interface ExplorerService {
 	 * 将提交的任务置于队首，尽可能的立即执行，但是并不能保证会被立即执行。
 	 * 多线程情况下，即便是置于队首的任务，也有可能在执行之前，被其它任务挤占。
 	 *
-	 * @param <T>     返回值类型
-	 * @param task    任务
-	 * @param barrier 执行屏障
+	 * @param <T>   返回值类型
+	 * @param task  任务
+	 * @param fence 执行屏障
 	 * @return 待完成任务的异步计算的结果
 	 * @throws UnsupportedOperationException 部分实现可能不支持此操作
 	 */
-	default <T> Future<T> submitNow(Callable<T> task, TrackBarrier barrier) {
+	default <T> Future<T> submitNow(Callable<T> task, Object fence) {
 		throw new UnsupportedOperationException();
 	}
 
