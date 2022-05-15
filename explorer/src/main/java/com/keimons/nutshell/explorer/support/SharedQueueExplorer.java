@@ -3,7 +3,6 @@ package com.keimons.nutshell.explorer.support;
 import com.keimons.nutshell.explorer.BlockingCallerHandler;
 import com.keimons.nutshell.explorer.ExplorerService;
 import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
-import com.keimons.nutshell.explorer.TrackBarrier;
 
 import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
@@ -162,11 +161,11 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 	}
 
 	@Override
-	public void executeNow(Runnable task, TrackBarrier barrier) {
+	public void executeNow(Runnable task, Object fence) {
 		try {
 			execute(task);
 		} catch (InternalException e) {
-			reject(barrier, task, false);
+			reject(fence, task, false);
 		}
 	}
 
@@ -181,32 +180,32 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 	}
 
 	@Override
-	public Future<?> submitNow(Runnable task, TrackBarrier barrier) {
+	public Future<?> submitNow(Runnable task, Object fence) {
 		if (task == null) {
 			throw new NullPointerException();
 		}
 		RunnableFuture<Void> future = newTaskFor(task, null);
-		executeNow(future, barrier);
+		executeNow(future, fence);
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submit(Callable<T> task, TrackBarrier barrier) {
+	public <T> Future<T> submit(Callable<T> task, Object fence) {
 		if (task == null) {
 			throw new NullPointerException();
 		}
 		RunnableFuture<T> future = newTaskFor(task);
-		execute(future, barrier);
+		execute(future, fence);
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submitNow(Callable<T> task, TrackBarrier barrier) {
+	public <T> Future<T> submitNow(Callable<T> task, Object fence) {
 		if (task == null) {
 			throw new NullPointerException();
 		}
 		RunnableFuture<T> future = newTaskFor(task);
-		executeNow(future, barrier);
+		executeNow(future, fence);
 		return future;
 	}
 

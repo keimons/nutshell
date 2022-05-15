@@ -1,7 +1,6 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.AbstractExplorerService;
-import com.keimons.nutshell.explorer.TrackBarrier;
 
 import java.util.concurrent.*;
 
@@ -26,7 +25,7 @@ public class DirectExplorer extends AbstractExplorerService {
 	}
 
 	public DirectExplorer(String name) {
-		super(name, 0, DefaultRejectedHandler,  Executors.defaultThreadFactory());
+		super(name, 0, DefaultRejectedHandler, Executors.defaultThreadFactory());
 	}
 
 	@Override
@@ -35,7 +34,7 @@ public class DirectExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public void executeNow(Runnable task, TrackBarrier barrier) {
+	public void executeNow(Runnable task, Object fence) {
 		task.run();
 	}
 
@@ -47,20 +46,20 @@ public class DirectExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public Future<?> submitNow(Runnable task, TrackBarrier barrier) {
-		return submit(task, barrier);
+	public Future<?> submitNow(Runnable task, Object fence) {
+		return submit(task, fence);
 	}
 
 	@Override
-	public <T> Future<T> submit(Callable<T> task, TrackBarrier barrier) {
+	public <T> Future<T> submit(Callable<T> task, Object fence) {
 		FutureTask<T> future = new FutureTask<>(task);
 		future.run();
 		return future;
 	}
 
 	@Override
-	public <T> Future<T> submitNow(Callable<T> task, TrackBarrier barrier) {
-		return submit(task, barrier);
+	public <T> Future<T> submitNow(Callable<T> task, Object fence) {
+		return submit(task, fence);
 	}
 
 	@Override
