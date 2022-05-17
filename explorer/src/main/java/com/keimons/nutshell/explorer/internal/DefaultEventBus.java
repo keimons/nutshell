@@ -16,6 +16,8 @@ import java.util.concurrent.atomic.AtomicLong;
  **/
 public class DefaultEventBus<T> implements EventBus<T> {
 
+//	private static final VarHandle L = XUtils.findVarHandle(DefaultEventBus.class, "writerIndex", long.class);
+
 	final int capacity;
 
 	final int mark;
@@ -32,6 +34,7 @@ public class DefaultEventBus<T> implements EventBus<T> {
 	 */
 	final Node<T>[] buffer;
 
+	@Contended
 	volatile long writerIndex;
 
 	/**
@@ -55,6 +58,10 @@ public class DefaultEventBus<T> implements EventBus<T> {
 			this.buffer[i] = new Node<>();
 		}
 	}
+
+//	private long getAndIncrement() {
+//		return (long) L.getAndAdd(this, 1L);
+//	}
 
 	@Override
 	@ForceInline
@@ -99,6 +106,13 @@ public class DefaultEventBus<T> implements EventBus<T> {
 		return event;
 	}
 
+	/**
+	 * 线程安全的
+	 * <p>
+	 * 同时有且仅只有一个线程在完成事件。
+	 *
+	 * @param index 事件索引
+	 */
 	@Override
 	public void finishEvent(long index) {
 		int offset = (int) (index & mark);
@@ -107,7 +121,34 @@ public class DefaultEventBus<T> implements EventBus<T> {
 		node.state = Node.STATE_FREE;
 	}
 
+	public boolean removeEvent(long index) {
+		int offset = (int) (index & mark);
+		Node<T> node = buffer[offset];
+		// 先设置version在设置event，所以，获取的时候应该相反的顺序，先获取event，再获取version
+		T event = node.event;
+		long version = node.version;
+		if (event != null && version == index) {
+			if (node.casEvent(event, null)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * 环形缓冲区中的节点
+	 * <p>
+	 * 节点在缓冲区创建时初始化，直到事件总线被回收时销毁。
+	 * <p>
+	 * 节点中的字段，有严格的设置顺序，例如在{@link #publishEvent(Object)}中的设置：
+	 * {@link #state} -> {@link #version} -> {@link #event}这个顺序是不能更改的，
+	 * 和严格的修改顺序{@link #event}
+	 *
+	 * @param <T>
+	 */
 	private static class Node<T> {
+
+		private static final VarHandle AA = XUtils.findVarHandle(Node.class, "event", Object.class);
 
 		private static final VarHandle II = XUtils.findVarHandle(Node.class, "state", int.class);
 
@@ -129,6 +170,10 @@ public class DefaultEventBus<T> implements EventBus<T> {
 
 		@Contended
 		volatile long version;
+
+		public boolean casEvent(Object expected, Object newValue) {
+			return AA.compareAndSet(this, expected, newValue);
+		}
 
 		public boolean casState(int expected, int newValue) {
 			return II.compareAndSet(this, expected, newValue);

@@ -34,7 +34,7 @@ public class QueueExplorer extends AbstractExplorerService {
 	@Override
 	public void execute(Runnable task, Object fence) {
 		if (!running) {
-			rejectedHandler.rejectedExecution(fence, task, this);
+			rejectedHandler.rejectedExecution(this, task, fence);
 		}
 		executors[fence.hashCode() % nThreads].execute(task, fence);
 	}
@@ -42,7 +42,7 @@ public class QueueExplorer extends AbstractExplorerService {
 	@Override
 	public void executeNow(Runnable task, Object fence) {
 		if (!running) {
-			rejectedHandler.rejectedExecution(fence, task, this);
+			rejectedHandler.rejectedExecution(this, task, fence);
 		}
 		executors[fence.hashCode() % nThreads].executeNow(task, fence);
 	}
@@ -78,6 +78,11 @@ public class QueueExplorer extends AbstractExplorerService {
 	@Override
 	public boolean isShutdown() {
 		return !running;
+	}
+
+	@Override
+	public Future<?> close() {
+		return null;
 	}
 
 	@Override
@@ -161,7 +166,7 @@ public class QueueExplorer extends AbstractExplorerService {
 							notFull.await();
 							// 线程被唤醒后，先检查线程池是否关闭，线程池关闭时，也会唤醒所有等待中的线程
 							if (!running) {
-								rejectedHandler.rejectedExecution(fence, task, QueueExplorer.this);
+								rejectedHandler.rejectedExecution(QueueExplorer.this, task, fence);
 								return;
 							}
 						}
@@ -173,7 +178,7 @@ public class QueueExplorer extends AbstractExplorerService {
 					Thread.currentThread().interrupt();
 				}
 			} else {
-				rejectedHandler.rejectedExecution(fence, task, QueueExplorer.this);
+				rejectedHandler.rejectedExecution(QueueExplorer.this, task, fence);
 			}
 		}
 

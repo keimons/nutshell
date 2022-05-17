@@ -151,5 +151,10 @@ public interface ExplorerService {
 	/**
 	 * 关闭线程池
 	 */
+	Future<?> close();
+
+	/**
+	 * 关闭线程池
+	 */
 	void shutdown();
 }
