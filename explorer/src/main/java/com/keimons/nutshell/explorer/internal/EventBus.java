@@ -33,8 +33,9 @@ public interface EventBus<T> {
 	 * 发布一个事件
 	 *
 	 * @param event 事件
+	 * @return {@code true}发布成功，{@code false}发布失败
 	 */
-	void publishEvent(T event);
+	boolean publishEvent(T event);
 
 	/**
 	 * 根据位置索引获取一个事件
@@ -50,4 +51,17 @@ public interface EventBus<T> {
 	 * @param index 事件索引
 	 */
 	void finishEvent(long index);
+
+	/**
+	 * 测试一个标志位是否已结束
+	 *
+	 * @param writerIndex 下标
+	 * @return 是否已结束
+	 */
+	boolean testWriterIndex(long writerIndex);
+
+	/**
+	 * 关闭环形缓冲区
+	 */
+	void shutdown();
 }

@@ -5,7 +5,7 @@ import jdk.internal.vm.annotation.Contended;
 import jdk.internal.vm.annotation.ForceInline;
 
 import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 事件总线
@@ -34,16 +34,12 @@ public class DefaultEventBus<T> implements EventBus<T> {
 	 */
 	final Node<T>[] buffer;
 
-	@Contended
 	volatile long writerIndex;
 
 	/**
-	 * 记录已读取事件数量
-	 * <p>
-	 * 这是一个计数值，用于计数已经处理了多少事件。（未完成设计）
+	 * 允许写入的最后一个位置
 	 */
-	@Deprecated
-	private final AtomicLong record = new AtomicLong();
+	volatile long limitIndex = Long.MAX_VALUE;
 
 	@SuppressWarnings("unchecked")
 	public DefaultEventBus(int capacity) {
@@ -59,9 +55,7 @@ public class DefaultEventBus<T> implements EventBus<T> {
 		}
 	}
 
-//	private long getAndIncrement() {
-//		return (long) L.getAndAdd(this, 1L);
-//	}
+	AtomicBoolean mainLock = new AtomicBoolean();
 
 	@Override
 	@ForceInline
@@ -70,26 +64,53 @@ public class DefaultEventBus<T> implements EventBus<T> {
 	}
 
 	@Override
-	public void publishEvent(T event) {
+	public boolean publishEvent(T event) {
 		while (true) {
-			long writerIndex = this.writerIndex;
-			int offset = (int) (writerIndex & mark);
-			Node<T> node = buffer[offset];
-			if (node.casState(Node.STATE_FREE, Node.STATE_FULL)) {
-				// recheck
-				if (writerIndex != this.writerIndex) {
-					// rollback state
-					node.state = Node.STATE_FREE;
-					continue;
+			if (mainLock.compareAndSet(false, true)) {
+				try {
+					long writerIndex = this.writerIndex;
+					if (writerIndex < limitIndex) {
+						int offset = (int) (writerIndex & mark);
+						Node<T> node = buffer[offset];
+						if (node.event != null) {
+							continue;
+						}
+						node.version = writerIndex;
+						node.event = event;
+						this.writerIndex = writerIndex + 1;
+						return true;
+					} else {
+						return false;
+					}
+				} finally {
+					mainLock.set(false);
 				}
-				node.version = writerIndex;
-				node.event = event;
-				this.writerIndex = writerIndex + 1;
-				return;
 			} else {
-				// TODO 调用拒绝策略
 				Thread.yield();
 			}
+
+//			long writerIndex = this.writerIndex;
+//			int offset = (int) (writerIndex & mark);
+//			Node<T> node = buffer[offset];
+//			if (node.casState(Node.STATE_FREE, Node.STATE_FULL)) {
+//				// recheck
+//				if (writerIndex != this.writerIndex) {
+//					// rollback state
+//					node.state = Node.STATE_FREE;
+//					continue;
+//				}
+//				if (writerIndex < limitIndex) {
+//					node.version = writerIndex;
+//					node.event = event;
+//					this.writerIndex = writerIndex + 1;
+//					return true;
+//				} else {
+//					return false;
+//				}
+//			} else {
+//				// TODO 调用拒绝策略
+//				Thread.yield();
+//			}
 		}
 	}
 
@@ -121,18 +142,17 @@ public class DefaultEventBus<T> implements EventBus<T> {
 		node.state = Node.STATE_FREE;
 	}
 
-	public boolean removeEvent(long index) {
-		int offset = (int) (index & mark);
-		Node<T> node = buffer[offset];
-		// 先设置version在设置event，所以，获取的时候应该相反的顺序，先获取event，再获取version
-		T event = node.event;
-		long version = node.version;
-		if (event != null && version == index) {
-			if (node.casEvent(event, null)) {
-				return true;
-			}
+	@Override
+	public boolean testWriterIndex(long writerIndex) {
+		return writerIndex >= limitIndex;
+	}
+
+	@Override
+	public void shutdown() {
+		if (mainLock.compareAndSet(false, true)) {
+			limitIndex = writerIndex;
+			mainLock.set(false);
 		}
-		return false;
 	}
 
 	/**
@@ -147,8 +167,6 @@ public class DefaultEventBus<T> implements EventBus<T> {
 	 * @param <T>
 	 */
 	private static class Node<T> {
-
-		private static final VarHandle AA = XUtils.findVarHandle(Node.class, "event", Object.class);
 
 		private static final VarHandle II = XUtils.findVarHandle(Node.class, "state", int.class);
 
@@ -170,10 +188,6 @@ public class DefaultEventBus<T> implements EventBus<T> {
 
 		@Contended
 		volatile long version;
-
-		public boolean casEvent(Object expected, Object newValue) {
-			return AA.compareAndSet(this, expected, newValue);
-		}
 
 		public boolean casState(int expected, int newValue) {
 			return II.compareAndSet(this, expected, newValue);

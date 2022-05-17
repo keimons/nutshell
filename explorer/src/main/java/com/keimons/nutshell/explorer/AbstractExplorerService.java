@@ -20,12 +20,32 @@ public abstract class AbstractExplorerService implements ExplorerService {
 	 */
 	public static final RejectedTrackExecutionHandler DefaultRejectedHandler = new AbortPolicy();
 
+	/**
+	 * 运行中
+	 * <p>
+	 * 接受新任务并处理排队任务。
+	 */
 	protected static final int RUNNING = 0;
 
+	/**
+	 * 已关闭
+	 * <p>
+	 * 不接受新任务，正常处理排队中的任务，任务处理完成后线程池关闭。
+	 */
 	protected static final int CLOSE = 1 << 0;
 
+	/**
+	 * 已停止
+	 * <p>
+	 * 不接受新任务，不处理排队任务，中断正在进行的任务。
+	 */
 	protected static final int SHUTDOWN = 1 << 1;
 
+	/**
+	 * 已终结
+	 * <p>
+	 * 生命周期的最后一个状态，不接受新任务，不处理排队任务，中断正在进行的任务，尽可能的快速退出。
+	 */
 	protected static final int TERMINATED = 1 << 2;
 
 	/**
@@ -88,7 +108,7 @@ public abstract class AbstractExplorerService implements ExplorerService {
 	 */
 	/**
 	 * 线程池状态
-	 *
+	 * <p>
 	 * 用于提供生命周期的所有状态。{@code state}的取值有：
 	 * <ul>
 	 *     <li>{@link #RUNNING}：运行中，接受新任务并处理排队任务。</li>
@@ -96,7 +116,6 @@ public abstract class AbstractExplorerService implements ExplorerService {
 	 *     <li>{@link #SHUTDOWN}：已停止，不接受新任务，不处理排队任务，中断正在进行的任务。</li>
 	 *     <li>{@link #TERMINATED}：已终结，生命周期的最后一个状态。</li>
 	 * </ul>
-	 *
 	 */
 	protected volatile int state = RUNNING;
 

@@ -101,7 +101,6 @@ public class ReorderTest {
 			}, 0);
 		}
 		Future<?> future = explorer.submit(() -> System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get())), 0);
-		System.out.println("Submitted.");
 		future.get();
 	}
 
@@ -120,10 +119,12 @@ public class ReorderTest {
 		@Override
 		public Thread newThread(@NotNull Runnable r) {
 			Thread t = new Thread(group, r, String.valueOf(Index.getAndIncrement()), 0);
-			if (t.isDaemon())
+			if (t.isDaemon()) {
 				t.setDaemon(false);
-			if (t.getPriority() != Thread.NORM_PRIORITY)
+			}
+			if (t.getPriority() != Thread.NORM_PRIORITY) {
 				t.setPriority(Thread.NORM_PRIORITY);
+			}
 			return t;
 		}
 	}
