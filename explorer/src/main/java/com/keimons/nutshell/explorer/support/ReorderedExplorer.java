@@ -1,16 +1,20 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.AbstractExplorerService;
+import com.keimons.nutshell.explorer.ExplorerService;
 import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
 import com.keimons.nutshell.explorer.TrackBarrier;
 import com.keimons.nutshell.explorer.internal.DefaultEventBus;
 import com.keimons.nutshell.explorer.utils.XUtils;
 import jdk.internal.vm.annotation.Contended;
+import org.jetbrains.annotations.NotNull;
 
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Predicate;
 
 /**
  * 环轨执行器
@@ -78,7 +82,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 * <p>
 	 * 为每个线程分配2048的队列。例如，拥有4个线程的线程池，则队列总长度为{@code 4 * 2048 = 8192}。
 	 */
-	public static final int DEFAULT_THREAD_CAPACITY = 1024;
+	public static final int DEFAULT_THREAD_CAPACITY = 2048;
+
+	public static final AtomicInteger EXPLORER_WATCHER_INDEX = new AtomicInteger();
 
 	/**
 	 * 默认线程池名称
@@ -97,6 +103,14 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 */
 	private final ReorderedWorker[] executors;
 
+	/**
+	 * 守望线程
+	 */
+	private final Watcher watcher;
+
+	private final LongAdder commitTasks = new LongAdder();
+	private final LongAdder publicTasks = new LongAdder();
+
 	public ReorderedExplorer(int nThreads) {
 		this(DEFAULT_NAME, nThreads, nThreads * DEFAULT_THREAD_CAPACITY, DefaultRejectedHandler, Executors.defaultThreadFactory());
 	}
@@ -110,6 +124,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			executor.thread.start();
 			executors[i] = executor;
 		}
+		watcher = new Watcher();
+		Thread thread = new Thread(watcher, "ExplorerWatcher-" + EXPLORER_WATCHER_INDEX.getAndIncrement());
+		thread.setDaemon(true);
+		thread.setPriority(Thread.MIN_PRIORITY);
+		thread.start();
 	}
 
 	/**
@@ -119,10 +138,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 */
 	private void weakUp(int track) {
 		ReorderedWorker worker = executors[track];
-		StampedLock lock = worker.lock;
-		lock.increment();
-		if (lock.blocked) {
-			lock.blocked = false;
+		worker.increment();
+		if (worker.blocked) {
+			worker.blocked = false;
 			LockSupport.unpark(worker.thread);
 		}
 	}
@@ -133,11 +151,14 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			throw new NullPointerException();
 		}
 		if (state > RUNNING) {
-			rejectedHandler.rejectedExecution(this, task, task);
+			rejectedHandler.rejectedExecution(this, task, fence);
 		} else {
 			Node node = new Node1(task, fence);
-			eventBus.publishEvent(node);
-			node.weakUp();
+			if (eventBus.publishEvent(node)) {
+				node.weakUp();
+			} else {
+				rejectedHandler.rejectedExecution(this, task, fence);
+			}
 		}
 	}
 
@@ -149,8 +170,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			rejectedHandler.rejectedExecution(this, task, fence0, fence1);
 		} else {
 			Node node = new Node2(task, fence0, fence1);
-			eventBus.publishEvent(node);
-			node.weakUp();
+			if (eventBus.publishEvent(node)) {
+				node.weakUp();
+			} else {
+				rejectedHandler.rejectedExecution(this, task, fence0, fence1);
+			}
 		}
 	}
 
@@ -162,11 +186,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			rejectedHandler.rejectedExecution(this, task, fence0, fence1, fence2);
 		} else {
 			Node node = new Node3(task, fence0, fence1, fence2);
-			eventBus.publishEvent(node);
-			if (state > RUNNING && eventBus.removeEvent(node.getIndex())) {
+			if (eventBus.publishEvent(node)) {
+				node.weakUp();
+			} else {
 				rejectedHandler.rejectedExecution(this, task, fence0, fence1, fence2);
 			}
-			node.weakUp();
 		}
 	}
 
@@ -183,8 +207,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			rejectedHandler.rejectedExecution(this, task, fences);
 		} else {
 			Node node = new NodeX(task, fences);
-			eventBus.publishEvent(node);
-			node.weakUp();
+			if (eventBus.publishEvent(node)) {
+				node.weakUp();
+			} else {
+				rejectedHandler.rejectedExecution(this, task, fences);
+			}
 		}
 	}
 
@@ -244,7 +271,17 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	@Override
 	public Future<?> close() {
 		state = CLOSE;
-		return null;
+		eventBus.shutdown();
+		for (ReorderedWorker worker : executors) {
+			worker.thread.interrupt();
+		}
+		return new CloseFuture((explorer) -> {
+			int sum = 0;
+			for (ReorderedWorker executor : executors) {
+				sum += executor.completedTasks;
+			}
+			return sum >= eventBus.writerIndex();
+		});
 	}
 
 	/**
@@ -258,11 +295,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		throw new UnsupportedOperationException();
 	}
 
-//	public static final VarHandle II = XUtils.findVarHandle(ReorderedWorker.class, "park", int.class);
-
-	public static final int STATE_FREE = 0;
-	public static final int STATE_BUSY = 1;
-	public static final int STATE_FULL = 0;
+	private static final VarHandle L = XUtils.findVarHandle(ReorderedWorker.class, "stamp", int.class);
 
 	/**
 	 * 支持重排序的环轨执行器
@@ -325,17 +358,18 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 **/
 	private class ReorderedWorker implements Runnable {
 
-		@Contended
-		protected final Thread thread;
-
 		protected final int track;
 
 		private int interceptIndex;
 
 		private int barrierIndex;
 
-		@Contended
-		private volatile long readerIndex;
+		private long readerIndex;
+
+		/**
+		 * 已完成的任务数量
+		 */
+		long completedTasks;
 
 		/**
 		 * 拦截队列
@@ -351,15 +385,24 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		 */
 		private Node[] barriers = new Node[8];
 
-		final ReorderedExplorer.StampedLock lock = new ReorderedExplorer.StampedLock();
+		@Contended
+		protected Thread thread;
 
 		@Contended
-		volatile boolean parked;
+		volatile int stamp;
+
+		@Contended
+		volatile boolean blocked;
 
 		/**
-		 * 状态
+		 * 自增
 		 */
-		AtomicInteger stamp = new AtomicInteger();
+		public void increment() {
+			int v;
+			do {
+				v = stamp;
+			} while (!L.compareAndSet(this, v, v + 1));
+		}
 
 		/**
 		 * 执行器
@@ -413,17 +456,22 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			return true;
 		}
 
-		private Node next() {
-			while (true) {
+		private Node take() {
+			Node node;
+			for (; ; ) {
+				// 状态检测，如果线程池已停止
+				if (state >= CLOSE && eventBus.testWriterIndex(readerIndex)) {
+					return null;
+				}
 				for (int i = 0; i < barrierIndex; i++) {
-					Node node = barriers[i];
+					node = barriers[i];
 					if (!node.isIntercepted()) {
 //						Debug.info("Work-" + track + " 移除屏障：" + node.getTask());
 						_remove1(i);
 					}
 				}
 				for (int i = 0; i < interceptIndex; i++) {
-					Node node = intercepted[i];
+					node = intercepted[i];
 					if (isReorder(node)) {
 						// 这个任务已经可以执行了，所以，直接移除
 						_remove0(i);
@@ -440,9 +488,10 @@ public class ReorderedExplorer extends AbstractExplorerService {
 						}
 					}
 				}
+				int stamp = this.stamp;
 				final long readerIndex = this.readerIndex;
 				if (readerIndex < eventBus.writerIndex()) {
-					Node node = eventBus.getEvent(readerIndex);
+					node = eventBus.getEvent(readerIndex);
 					this.readerIndex = readerIndex + 1;
 					if (node == null) {
 						continue;
@@ -468,50 +517,33 @@ public class ReorderedExplorer extends AbstractExplorerService {
 						}
 					}
 				} else {
-					return null;
+					blocked = true;
+					// 在读取过程中，是否发生过变化
+					if (stamp != this.stamp) {
+						blocked = false;
+						continue;
+					}
+					LockSupport.park();
 				}
 			}
 		}
 
 		@Override
 		public void run() {
-			while (running) {
+			Node node;
+			while ((node = take()) != null) {
 				try {
-					while (running) {
-						Node node = null;
-						try {
-							long stamp = lock.stamp;
-							node = next();
-							if (node == null) {
-								lock.blocked = true;
-								// 在读取过程中，是否发生过变化
-								if (stamp != lock.stamp) {
-									continue;
-								}
-								LockSupport.park();
-							}
-							if (node != null) {
-								node.getTask().run();
-							}
-						} catch (Throwable e) {
-							// ignore
-							e.printStackTrace();
-						} finally {
-							if (node != null) {
-								node.release(track);
-							}
-						}
-					}
-				} catch (Throwable e) {
-					// ignore
-					e.printStackTrace();
+					node.getTask().run();
+				} finally {
+					completedTasks++;
+					node.release(track);
 				}
 			}
 		}
 
 		@Override
 		public String toString() {
-			return "ReorderTrackWorker-" + track;
+			return "ReorderWorker-" + track;
 		}
 	}
 
@@ -618,13 +650,6 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		public abstract void weakUp();
 
 		public abstract boolean isReorder(Node other);
-
-		/**
-		 * 释放节点
-		 *
-		 * @param track 执行任务的轨道
-		 */
-		public abstract void release(int track);
 	}
 
 	public class Node1 implements Node {
@@ -811,30 +836,30 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 	public class Node3 extends AbstractNode {
 
-		private final int track1;
+		private final int track0;
 
 		private final Object fence0;
 
-		private final int track2;
+		private final int track1;
 
 		private final Object fence1;
 
-		private final int track3;
+		private final int track2;
 
 		private final Object fence2;
 
 		public Node3(Runnable task, Object fence0, Object fence1, Object fence2) {
 			super(task, 3);
-			this.track1 = fence0.hashCode() % nThreads;
-			this.track2 = fence1.hashCode() % nThreads;
-			this.track3 = fence2.hashCode() % nThreads;
+			this.track0 = fence0.hashCode() % nThreads;
+			this.track1 = fence1.hashCode() % nThreads;
+			this.track2 = fence2.hashCode() % nThreads;
 			this.fence0 = fence0;
 			this.fence1 = fence1;
 			this.fence2 = fence2;
-			this.bits = (1L << this.track1) | (1L << (this.track2)) | (1L << (this.track3));
-			if (this.track1 == this.track2 && this.track1 == this.track3) {
+			this.bits = (1L << this.track0) | (1L << (this.track1)) | (1L << (this.track2));
+			if (this.track0 == this.track1 && this.track0 == this.track2) {
 				this.forbids = 0;
-			} else if (this.track1 == this.track2 || this.track1 == this.track3 || this.track2 == this.track3) {
+			} else if (this.track0 == this.track1 || this.track0 == this.track2 || this.track1 == this.track2) {
 				this.forbids = 1;
 			} else {
 				this.forbids = 2;
@@ -843,9 +868,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 		@Override
 		public void weakUp() {
+			ReorderedExplorer.this.weakUp(track0);
 			ReorderedExplorer.this.weakUp(track1);
 			ReorderedExplorer.this.weakUp(track2);
-			ReorderedExplorer.this.weakUp(track3);
 		}
 
 		/**
@@ -892,20 +917,20 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 		@Override
 		public boolean isSingle() {
-			return track1 == track2 && track1 == track3;
+			return track0 == track1 && track0 == track2;
 		}
 
 		@Override
 		public void release(int track) {
 			intercepted = false;
+			if (track != track0) {
+				ReorderedExplorer.this.weakUp(track0);
+			}
 			if (track != track1) {
 				ReorderedExplorer.this.weakUp(track1);
 			}
 			if (track != track2) {
 				ReorderedExplorer.this.weakUp(track2);
-			}
-			if (track != track3) {
-				ReorderedExplorer.this.weakUp(track3);
 			}
 		}
 	}
@@ -992,45 +1017,61 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	// endregion
 
 	/**
-	 * 弱锁
-	 * <p>
-	 * 准确说它其实不是锁。
+	 * 守望线程
 	 */
-	private static class StampedLock {
+	public class Watcher implements Runnable {
 
-		private static final VarHandle L = XUtils.findVarHandle(StampedLock.class, "stamp", long.class);
+		volatile Runnable task = null;
 
-		volatile long stamp;
+		@Override
+		public void run() {
+			while (state < TERMINATED) {
+				if (task != null) {
+					task.run();
+				}
+				// park 1 ms
+				LockSupport.parkNanos(1_000_000);
+			}
+		}
+	}
 
-		volatile boolean blocked;
+	public class CloseFuture implements Future<Object> {
 
-		/**
-		 * 尝试乐观读
-		 *
-		 * @return 事件戳
-		 */
-		public long tryOptimisticRead() {
-			return stamp;
+		volatile boolean cancel = false;
+
+		Predicate<ExplorerService> tester;
+
+		public CloseFuture(Predicate<ExplorerService> tester) {
+			this.tester = tester;
 		}
 
-		/**
-		 * 验证事件戳
-		 *
-		 * @param stamp 事件戳
-		 * @return {@code true}运行期间未发生改变，{@code false}运行期间有变化
-		 */
-		public boolean validate(long stamp) {
-			return this.stamp == stamp;
+		@Override
+		public boolean cancel(boolean mayInterruptIfRunning) {
+			cancel = true;
+			return true;
 		}
 
-		/**
-		 * 自增
-		 */
-		public void increment() {
-			long v;
-			do {
-				v = stamp;
-			} while (!L.compareAndSet(this, v, v + 1));
+		@Override
+		public boolean isCancelled() {
+			return cancel;
+		}
+
+		@Override
+		public boolean isDone() {
+			return false;
+		}
+
+		@Override
+		public Object get() throws InterruptedException, ExecutionException {
+			while (!tester.test(ReorderedExplorer.this)) {
+				Thread.sleep(1);
+			}
+			return null;
+		}
+
+		@Override
+		public Object get(long timeout, @NotNull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+			throw new UnsupportedOperationException();
 		}
 	}
 }

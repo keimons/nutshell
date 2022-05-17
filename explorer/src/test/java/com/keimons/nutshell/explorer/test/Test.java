@@ -10,7 +10,7 @@ public class Test {
 		for (int i = 0; i < 10; i++) {
 			List<String> list = new LinkedList<>();
 			for (int j = 0; j < 200; j++) {
-				list.add(Character.toString((char) 'A' + i));
+				list.add(Character.toString('A' + i));
 			}
 			items.add(list);
 		}

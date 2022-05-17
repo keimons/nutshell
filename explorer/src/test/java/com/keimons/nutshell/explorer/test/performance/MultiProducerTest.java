@@ -9,8 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -78,18 +77,28 @@ public class MultiProducerTest {
 	 */
 	@DisplayName("Executor测试")
 	@Test
-	public void testExecutor() throws InterruptedException {
+	public void testExecutor() throws InterruptedException, BrokenBarrierException {
 		ExecutorService executor = Executors.newFixedThreadPool(N_READER);
+		CyclicBarrier barrier = new CyclicBarrier(N_WRITER + 1);
 		for (int i = 0; i < N_WRITER; i++) {
 			int start = i;
 			Thread thread = new Thread(() -> {
 				for (int j = start; j < TIMES; j += N_WRITER) {
 					executor.execute(tasks.get(j));
 				}
+				try {
+					barrier.await();
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
 			});
 			thread.start();
 		}
-		Thread.sleep(5000);
+		barrier.await();
+		executor.shutdown();
+		while (!executor.isTerminated()) {
+			Thread.sleep(1);
+		}
 	}
 
 	/**
@@ -99,17 +108,25 @@ public class MultiProducerTest {
 	 */
 	@DisplayName("Explorer测试")
 	@Test
-	public void testExplorer() throws InterruptedException {
+	public void testExplorer() throws InterruptedException, BrokenBarrierException, ExecutionException {
 		ReorderedExplorer explorer = new ReorderedExplorer(N_READER);
+		CyclicBarrier barrier = new CyclicBarrier(N_WRITER + 1);
 		for (int i = 0; i < N_WRITER; i++) {
 			int start = i;
 			Thread thread = new Thread(() -> {
 				for (int j = start; j < TIMES; j += N_WRITER) {
 					explorer.execute(tasks.get(j), j & MARK);
 				}
+				try {
+					barrier.await();
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
 			});
 			thread.start();
 		}
-		Thread.sleep(20000);
+		barrier.await();
+		Future<?> close = explorer.close();
+		close.get();
 	}
 }
