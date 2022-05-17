@@ -9,6 +9,7 @@ import jdk.internal.vm.annotation.Contended;
 
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -75,7 +76,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	/**
 	 * 默认线程队列长度
 	 * <p>
-	 * 为每个线程分配1024的队列。例如，8个线程的线程池，则队列总长度为{@code 8 * 1024 = 8192}的队列长度。
+	 * 为每个线程分配2048的队列。例如，拥有4个线程的线程池，则队列总长度为{@code 4 * 2048 = 8192}。
 	 */
 	public static final int DEFAULT_THREAD_CAPACITY = 1024;
 
@@ -94,7 +95,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	/**
 	 * 任务执行器
 	 */
-	private final ReorderedTrackWorker[] executors;
+	private final ReorderedWorker[] executors;
 
 	public ReorderedExplorer(int nThreads) {
 		this(DEFAULT_NAME, nThreads, nThreads * DEFAULT_THREAD_CAPACITY, DefaultRejectedHandler, Executors.defaultThreadFactory());
@@ -103,9 +104,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	public ReorderedExplorer(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler, ThreadFactory threadFactory) {
 		super(name, nThreads, rejectedHandler, threadFactory);
 		eventBus = new DefaultEventBus<>(capacity);
-		executors = new ReorderedTrackWorker[nThreads];
+		executors = new ReorderedWorker[nThreads];
 		for (int i = 0; i < nThreads; i++) {
-			ReorderedTrackWorker executor = new ReorderedTrackWorker(i, threadFactory);
+			ReorderedWorker executor = new ReorderedWorker(i, threadFactory);
 			executor.thread.start();
 			executors[i] = executor;
 		}
@@ -117,36 +118,74 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 * @param track 轨道
 	 */
 	private void weakUp(int track) {
-		ReorderedTrackWorker worker = executors[track];
-		if (worker.parked) {
-			worker.parked = false;
+		ReorderedWorker worker = executors[track];
+		StampedLock lock = worker.lock;
+		lock.increment();
+		if (lock.blocked) {
+			lock.blocked = false;
 			LockSupport.unpark(worker.thread);
 		}
 	}
 
 	@Override
 	public void execute(Runnable task, Object fence) {
-		Node node = new Node1(task, fence);
-		eventBus.publishEvent(node);
-		node.weakUpAll();
+		if (task == null || fence == null) {
+			throw new NullPointerException();
+		}
+		if (state > RUNNING) {
+			rejectedHandler.rejectedExecution(this, task, task);
+		} else {
+			Node node = new Node1(task, fence);
+			eventBus.publishEvent(node);
+			node.weakUp();
+		}
 	}
 
 	public void execute(Runnable task, Object fence0, Object fence1) {
-		Node node = new Node2(task, fence0, fence1);
-		eventBus.publishEvent(node);
-		node.weakUpAll();
+		if (task == null || fence0 == null || fence1 == null) {
+			throw new NullPointerException();
+		}
+		if (state > RUNNING) {
+			rejectedHandler.rejectedExecution(this, task, fence0, fence1);
+		} else {
+			Node node = new Node2(task, fence0, fence1);
+			eventBus.publishEvent(node);
+			node.weakUp();
+		}
 	}
 
 	public void execute(Runnable task, Object fence0, Object fence1, Object fence2) {
-		AbstractNode node = new Node3(task, fence0, fence1, fence2);
-		eventBus.publishEvent(node);
-		node.weakUpAll();
+		if (task == null || fence0 == null || fence1 == null || fence2 == null) {
+			throw new NullPointerException();
+		}
+		if (state > RUNNING) {
+			rejectedHandler.rejectedExecution(this, task, fence0, fence1, fence2);
+		} else {
+			Node node = new Node3(task, fence0, fence1, fence2);
+			eventBus.publishEvent(node);
+			if (state > RUNNING && eventBus.removeEvent(node.getIndex())) {
+				rejectedHandler.rejectedExecution(this, task, fence0, fence1, fence2);
+			}
+			node.weakUp();
+		}
 	}
 
 	public void execute(Runnable task, Object... fences) {
-		AbstractNode node = new NodeX(task, fences);
-		eventBus.publishEvent(node);
-		node.weakUpAll();
+		if (task == null) {
+			throw new NullPointerException();
+		}
+		for (int i = 0, count = fences.length; i < count; i++) {
+			if (fences[i] == null) {
+				throw new NullPointerException();
+			}
+		}
+		if (state > RUNNING) {
+			rejectedHandler.rejectedExecution(this, task, fences);
+		} else {
+			Node node = new NodeX(task, fences);
+			eventBus.publishEvent(node);
+			node.weakUp();
+		}
 	}
 
 	@Override
@@ -162,6 +201,34 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		return future;
 	}
 
+	public Future<?> submit(Runnable task, Object fence1, Object fence2, Object fence3) {
+		RunnableFuture<Void> future = new FutureTask<>(task, null);
+		execute(future, fence1, fence2, fence3);
+		return future;
+	}
+
+	public Future<?> submit(Runnable task, Object... fences) {
+		switch (fences.length) {
+			case 0: {
+				throw new RuntimeException();
+			}
+			case 1: {
+				return submit(task, fences[0]);
+			}
+			case 2: {
+				return submit(task, fences[0], fences[1]);
+			}
+			case 3: {
+				return submit(task, fences[0], fences[1], fences[2]);
+			}
+			default: {
+				RunnableFuture<Void> future = new FutureTask<>(task, null);
+				execute(future, fences);
+				return future;
+			}
+		}
+	}
+
 	@Override
 	public <T> Future<T> submit(Callable<T> task, Object fence) {
 		FutureTask<T> future = new FutureTask<>(task);
@@ -175,12 +242,27 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public void shutdown() {
-		running = false;
-		for (ReorderedTrackWorker executor : executors) {
-			executor.shutdown();
-		}
+	public Future<?> close() {
+		state = CLOSE;
+		return null;
 	}
+
+	/**
+	 * // 我们再三考虑决定，移除对于shutdown的支持。
+	 * // 因为对于支持重排序的线程池来说，所有任务已经结束。
+	 *
+	 * @throws UnsupportedOperationException 不支持的{@code shutdown()}调用
+	 */
+	@Override
+	public void shutdown() {
+		throw new UnsupportedOperationException();
+	}
+
+//	public static final VarHandle II = XUtils.findVarHandle(ReorderedWorker.class, "park", int.class);
+
+	public static final int STATE_FREE = 0;
+	public static final int STATE_BUSY = 1;
+	public static final int STATE_FULL = 0;
 
 	/**
 	 * 支持重排序的环轨执行器
@@ -241,7 +323,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 * @version 1.0
 	 * @since 11
 	 **/
-	private class ReorderedTrackWorker implements Runnable {
+	private class ReorderedWorker implements Runnable {
 
 		@Contended
 		protected final Thread thread;
@@ -269,15 +351,22 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		 */
 		private Node[] barriers = new Node[8];
 
+		final ReorderedExplorer.StampedLock lock = new ReorderedExplorer.StampedLock();
+
 		@Contended
 		volatile boolean parked;
+
+		/**
+		 * 状态
+		 */
+		AtomicInteger stamp = new AtomicInteger();
 
 		/**
 		 * 执行器
 		 * <p>
 		 * 消息的真正执行者
 		 */
-		public ReorderedTrackWorker(int track, ThreadFactory threadFactory) {
+		public ReorderedWorker(int track, ThreadFactory threadFactory) {
 			this.track = track;
 			this.thread = threadFactory.newThread(this);
 		}
@@ -341,7 +430,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 						if (node.tryIntercept()) {
 //							Debug.info("Work-" + track + " 恢复屏障：" + node.getTask());
 							_add1(node);
-							node.weakUpAll();
+							node.weakUp();
 						} else {
 //							Debug.info("Work-" + track + " 恢复任务：" + node.getTask());
 							if (!node.isSingle()) {
@@ -384,13 +473,6 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			}
 		}
 
-		/**
-		 * 关闭线程
-		 */
-		public void shutdown() {
-
-		}
-
 		@Override
 		public void run() {
 			while (running) {
@@ -398,13 +480,15 @@ public class ReorderedExplorer extends AbstractExplorerService {
 					while (running) {
 						Node node = null;
 						try {
+							long stamp = lock.stamp;
 							node = next();
 							if (node == null) {
-								parked = true;
-								node = next();
-								if (node == null) {
-									LockSupport.park();
+								lock.blocked = true;
+								// 在读取过程中，是否发生过变化
+								if (stamp != lock.stamp) {
+									continue;
 								}
+								LockSupport.park();
 							}
 							if (node != null) {
 								node.getTask().run();
@@ -431,6 +515,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 	}
 
+	// region Node
+
 	private static final VarHandle VV = XUtils.findVarHandle(AbstractNode.class, "forbids", int.class);
 
 	public interface Node {
@@ -441,7 +527,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 		Runnable getTask();
 
-		int getFenceCount();
+		int size();
 
 		boolean tryIntercept();
 
@@ -449,17 +535,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 		boolean isTrack(long bits);
 
-		/**
-		 * 判断节点是否该轨道上
-		 *
-		 * @param track 轨道
-		 * @return 是否在当前轨道
-		 */
-		boolean isTrack(int track);
-
 		boolean isSingle();
 
-		void weakUpAll();
+		void weakUp();
 
 		boolean isReorder(Node other);
 
@@ -480,7 +558,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		 */
 		protected long bits;
 
-		protected final int nParams;
+		protected final int size;
 
 		protected final Runnable task;
 
@@ -491,8 +569,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 		protected volatile boolean intercepted = true;
 
-		protected AbstractNode(Runnable task, int nParams) {
-			this.nParams = nParams;
+		protected AbstractNode(Runnable task, int size) {
+			this.size = size;
 			this.task = task;
 		}
 
@@ -512,8 +590,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public int getFenceCount() {
-			return nParams;
+		public int size() {
+			return size;
 		}
 
 		public boolean tryIntercept() {
@@ -532,22 +610,12 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			return (this.bits & bits) != 0;
 		}
 
-		/**
-		 * 判断节点是否该轨道上
-		 *
-		 * @param track 轨道
-		 * @return 是否在当前轨道
-		 */
-		public boolean isTrack(int track) {
-			return (bits & 1L << track) != 0;
-		}
-
 		@Override
 		public boolean isSingle() {
 			return Long.bitCount(bits) <= 1;
 		}
 
-		public abstract void weakUpAll();
+		public abstract void weakUp();
 
 		public abstract boolean isReorder(Node other);
 
@@ -591,7 +659,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public int getFenceCount() {
+		public int size() {
 			return 0;
 		}
 
@@ -612,18 +680,13 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public boolean isTrack(int track) {
-			return false;
-		}
-
-		@Override
 		public boolean isSingle() {
 			return true;
 		}
 
 		@Override
-		public void weakUpAll() {
-			weakUp(track);
+		public void weakUp() {
+			ReorderedExplorer.this.weakUp(track);
 		}
 
 		/**
@@ -634,7 +697,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		 */
 		@Override
 		public boolean isReorder(Node other) {
-			switch (other.getFenceCount()) {
+			switch (other.size()) {
 				case 1: {
 					throw new IllegalStateException();
 				}
@@ -648,7 +711,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				}
 				default: {
 					NodeX nodeX = (NodeX) other;
-					for (int i = 0, count = nodeX.nParams; i < count; i++) {
+					for (int i = 0, count = nodeX.size; i < count; i++) {
 						Object v = nodeX.fences[i];
 						if (v.equals(fence)) {
 							return false;
@@ -686,9 +749,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public void weakUpAll() {
-			weakUp(track1);
-			weakUp(track2);
+		public void weakUp() {
+			ReorderedExplorer.this.weakUp(track1);
+			ReorderedExplorer.this.weakUp(track2);
 		}
 
 		/**
@@ -699,7 +762,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		 */
 		@Override
 		public boolean isReorder(Node other) {
-			switch (other.getFenceCount()) {
+			switch (other.size()) {
 				case 1: {
 					throw new IllegalStateException();
 				}
@@ -718,7 +781,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				}
 				default: {
 					NodeX nodeX = (NodeX) other;
-					for (int i = 0, count = nodeX.nParams; i < count; i++) {
+					for (int i = 0, count = nodeX.size; i < count; i++) {
 						Object v = nodeX.fences[i];
 						if (v.equals(fence0) || v.equals(fence1)) {
 							return false;
@@ -730,13 +793,18 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
+		public boolean isSingle() {
+			return track1 == track2;
+		}
+
+		@Override
 		public void release(int track) {
 			intercepted = false;
 			if (track != track1) {
-				weakUp(track1);
+				ReorderedExplorer.this.weakUp(track1);
 			}
 			if (track != track2) {
-				weakUp(track2);
+				ReorderedExplorer.this.weakUp(track2);
 			}
 		}
 	}
@@ -774,10 +842,10 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public void weakUpAll() {
-			weakUp(track1);
-			weakUp(track2);
-			weakUp(track3);
+		public void weakUp() {
+			ReorderedExplorer.this.weakUp(track1);
+			ReorderedExplorer.this.weakUp(track2);
+			ReorderedExplorer.this.weakUp(track3);
 		}
 
 		/**
@@ -788,7 +856,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		 */
 		@Override
 		public boolean isReorder(Node other) {
-			switch (other.getFenceCount()) {
+			switch (other.size()) {
 				case 1: {
 					throw new IllegalStateException();
 				}
@@ -811,7 +879,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				}
 				default: {
 					NodeX nodeX = (NodeX) other;
-					for (int i = 0, count = nodeX.nParams; i < count; i++) {
+					for (int i = 0, count = nodeX.size; i < count; i++) {
 						Object v = nodeX.fences[i];
 						if (v.equals(fence0) || v.equals(fence1) || v.equals(fence2)) {
 							return false;
@@ -823,16 +891,21 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
+		public boolean isSingle() {
+			return track1 == track2 && track1 == track3;
+		}
+
+		@Override
 		public void release(int track) {
 			intercepted = false;
 			if (track != track1) {
-				weakUp(track1);
+				ReorderedExplorer.this.weakUp(track1);
 			}
 			if (track != track2) {
-				weakUp(track2);
+				ReorderedExplorer.this.weakUp(track2);
 			}
 			if (track != track3) {
-				weakUp(track3);
+				ReorderedExplorer.this.weakUp(track3);
 			}
 		}
 	}
@@ -844,17 +917,17 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		public NodeX(Runnable task, Object... fences) {
 			super(task, fences.length);
 			this.fences = fences;
-			for (int i = 0; i < nParams; i++) {
+			for (int i = 0; i < size; i++) {
 				this.bits |= (1L << fences[i].hashCode() % nThreads);
 			}
 			this.forbids = Long.bitCount(bits) - 1;
 		}
 
 		@Override
-		public void weakUpAll() {
+		public void weakUp() {
 			for (int i = 0; i < nThreads; i++) {
 				if (isTrack(i)) {
-					weakUp(i);
+					ReorderedExplorer.this.weakUp(i);
 				}
 			}
 		}
@@ -867,13 +940,13 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		 */
 		@Override
 		public boolean isReorder(Node other) {
-			switch (other.getFenceCount()) {
+			switch (other.size()) {
 				case 1: {
 					throw new IllegalStateException();
 				}
 				case 2: {
 					Node2 node = (Node2) other;
-					for (int i = 0; i < nParams; i++) {
+					for (int i = 0; i < size; i++) {
 						Object fence = fences[i];
 						if (fence.equals(node.fence0) || fence.equals(node.fence1)) {
 							return false;
@@ -883,7 +956,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				}
 				case 3: {
 					Node3 node = (Node3) other;
-					for (int i = 0; i < nParams; i++) {
+					for (int i = 0; i < size; i++) {
 						Object fence = fences[i];
 						if (fence.equals(node.fence0) || fence.equals(node.fence1) || fence.equals(node.fence2)) {
 							return false;
@@ -893,9 +966,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				}
 				default: {
 					NodeX node = (NodeX) other;
-					for (int i = 0, count = node.nParams; i < count; i++) {
+					for (int i = 0, count = node.size; i < count; i++) {
 						Object v = node.fences[i];
-						for (int j = 0; j < nParams; j++) {
+						for (int j = 0; j < size; j++) {
 							if (v.equals(fences[j])) {
 								return false;
 							}
@@ -911,9 +984,53 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			intercepted = false;
 			for (int i = 0; i < nThreads; i++) {
 				if (isTrack(i)) {
-					weakUp(i);
+					ReorderedExplorer.this.weakUp(i);
 				}
 			}
+		}
+	}
+	// endregion
+
+	/**
+	 * 弱锁
+	 * <p>
+	 * 准确说它其实不是锁。
+	 */
+	private static class StampedLock {
+
+		private static final VarHandle L = XUtils.findVarHandle(StampedLock.class, "stamp", long.class);
+
+		volatile long stamp;
+
+		volatile boolean blocked;
+
+		/**
+		 * 尝试乐观读
+		 *
+		 * @return 事件戳
+		 */
+		public long tryOptimisticRead() {
+			return stamp;
+		}
+
+		/**
+		 * 验证事件戳
+		 *
+		 * @param stamp 事件戳
+		 * @return {@code true}运行期间未发生改变，{@code false}运行期间有变化
+		 */
+		public boolean validate(long stamp) {
+			return this.stamp == stamp;
+		}
+
+		/**
+		 * 自增
+		 */
+		public void increment() {
+			long v;
+			do {
+				v = stamp;
+			} while (!L.compareAndSet(this, v, v + 1));
 		}
 	}
 }

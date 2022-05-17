@@ -25,12 +25,12 @@ public class MultiProducerTest {
 	/**
 	 * 生产者数量
 	 */
-	private static final int N_WRITER = 1;
+	private static final int N_WRITER = 4;
 
 	/**
 	 * 消费者数量
 	 */
-	private static final int N_READER = 1;
+	private static final int N_READER = 2;
 
 	/**
 	 * Explorer执行key生成规则
@@ -110,6 +110,6 @@ public class MultiProducerTest {
 			});
 			thread.start();
 		}
-		Thread.sleep(5000);
+		Thread.sleep(20000);
 	}
 }

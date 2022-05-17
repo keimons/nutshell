@@ -1,6 +1,7 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.AbstractExplorerService;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.*;
 
@@ -68,7 +69,40 @@ public class DirectExplorer extends AbstractExplorerService {
 	}
 
 	@Override
+	public Future<?> close() {
+		return new FinishFuture();
+	}
+
+	@Override
 	public void shutdown() {
 		// do nothing
+	}
+
+	public static class FinishFuture implements Future<Object> {
+
+		@Override
+		public boolean cancel(boolean mayInterruptIfRunning) {
+			return false;
+		}
+
+		@Override
+		public boolean isCancelled() {
+			return false;
+		}
+
+		@Override
+		public boolean isDone() {
+			return true;
+		}
+
+		@Override
+		public Object get() throws InterruptedException, ExecutionException {
+			return null;
+		}
+
+		@Override
+		public Object get(long timeout, @NotNull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+			return null;
+		}
 	}
 }

@@ -109,7 +109,7 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 						notFull.await();
 						// 线程被唤醒后，先检查线程池是否关闭。
 						if (isShutdown()) {
-							rejectedHandler.rejectedExecution(fence, task, this);
+							rejectedHandler.rejectedExecution(this, task, fence);
 							return;
 						}
 					}
@@ -120,7 +120,7 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 				Thread.currentThread().interrupt();
 			}
 		} else {
-			rejectedHandler.rejectedExecution(fence, task, this);
+			rejectedHandler.rejectedExecution(this, task, fence);
 		}
 	}
 
@@ -207,6 +207,11 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 		RunnableFuture<T> future = newTaskFor(task);
 		executeNow(future, fence);
 		return future;
+	}
+
+	@Override
+	public Future<?> close() {
+		return null;
 	}
 
 	@Override

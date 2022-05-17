@@ -17,7 +17,7 @@ import java.util.concurrent.RejectedExecutionException;
 public class AbortPolicy implements RejectedTrackExecutionHandler {
 
 	@Override
-	public void rejectedExecution(Object fence, Runnable task, ExplorerService executor) {
+	public void rejectedExecution(ExplorerService executor, Runnable task, Object... fences) {
 		throw new RejectedExecutionException("Task " + task.toString() + " rejected from " + executor.getName());
 	}
 }
