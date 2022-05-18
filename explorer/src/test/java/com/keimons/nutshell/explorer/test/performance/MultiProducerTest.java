@@ -1,16 +1,9 @@
 package com.keimons.nutshell.explorer.test.performance;
 
 import com.keimons.nutshell.explorer.support.ReorderedExplorer;
-import com.keimons.nutshell.explorer.test.utils.FillUtils;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 性能测试
@@ -24,19 +17,19 @@ public class MultiProducerTest {
 	/**
 	 * 生产者数量
 	 */
-	private static final int N_WRITER = 4;
+	private int N_WRITER = 4;
 
 	/**
 	 * 消费者数量
 	 */
-	private static final int N_READER = 2;
+	private int N_READER = 2;
 
 	/**
 	 * Explorer执行key生成规则
 	 * <p>
 	 * 生成key：{@code index & MARK}。
 	 */
-	private static final int MARK = N_READER - 1;
+	private int MARK = N_READER - 1;
 
 	/**
 	 * 任务数量
@@ -46,28 +39,26 @@ public class MultiProducerTest {
 	/**
 	 * 测试任务
 	 */
-	private static final List<Runnable> tasks = new ArrayList<>(TIMES);
+	Runnable TASK = Task::new;
 
-	/**
-	 * 初始化所有任务
-	 * <p>
-	 * 对于Executor来说，任务执行市场应该是相同的。但是对于Explorer来说，需要输出每个线程执行时长。
-	 */
-	@BeforeAll
-	public static void beforeTest() {
-		AtomicLong[] times = (AtomicLong[]) Array.newInstance(AtomicLong.class, N_READER);
-		FillUtils.fill(times, AtomicLong::new);
-		for (int i = 0; i < TIMES; i++) {
-			int index = i;
-			if (i < N_READER) {
-				tasks.add(() -> times[index].set(System.currentTimeMillis()));
-			} else if (i >= TIMES - N_READER) {
-				tasks.add(() -> System.out.println(Thread.currentThread() + "Thread: " + (System.currentTimeMillis() - times[index - (TIMES - N_READER)].get())));
-			} else {
-				tasks.add(() -> {
-				});
-			}
+	ThreadLocal<Long> LOCAL = new ThreadLocal<>();
+
+	Runnable TIME = () -> {
+		Long start = LOCAL.get();
+		if (LOCAL.get() == null) {
+			LOCAL.set(System.currentTimeMillis());
+		} else {
+			long finish = System.currentTimeMillis();
+			System.out.println(Thread.currentThread() + ": " + (finish - start));
 		}
+	};
+
+	public void run(int nWriter, int nReader) throws BrokenBarrierException, InterruptedException, ExecutionException {
+		N_WRITER = nWriter;
+		N_READER = nReader;
+		MARK = N_READER - 1;
+		testExecutor();
+		testExplorer();
 	}
 
 	/**
@@ -75,16 +66,22 @@ public class MultiProducerTest {
 	 *
 	 * @throws InterruptedException 线程中断异常
 	 */
-	@DisplayName("Executor测试")
-	@Test
+//	@DisplayName("Executor测试")
+//	@Test
 	public void testExecutor() throws InterruptedException, BrokenBarrierException {
 		ExecutorService executor = Executors.newFixedThreadPool(N_READER);
 		CyclicBarrier barrier = new CyclicBarrier(N_WRITER + 1);
 		for (int i = 0; i < N_WRITER; i++) {
 			int start = i;
 			Thread thread = new Thread(() -> {
+				for (int j = start; j < N_READER; j += N_WRITER) {
+					executor.execute(TIME);
+				}
 				for (int j = start; j < TIMES; j += N_WRITER) {
-					executor.execute(tasks.get(j));
+					executor.execute(TASK);
+				}
+				for (int j = start; j < N_READER; j += N_WRITER) {
+					executor.execute(TIME);
 				}
 				try {
 					barrier.await();
@@ -106,16 +103,22 @@ public class MultiProducerTest {
 	 *
 	 * @throws InterruptedException 线程中断异常
 	 */
-	@DisplayName("Explorer测试")
-	@Test
+//	@DisplayName("Explorer测试")
+//	@Test
 	public void testExplorer() throws InterruptedException, BrokenBarrierException, ExecutionException {
 		ReorderedExplorer explorer = new ReorderedExplorer(N_READER);
 		CyclicBarrier barrier = new CyclicBarrier(N_WRITER + 1);
 		for (int i = 0; i < N_WRITER; i++) {
 			int start = i;
 			Thread thread = new Thread(() -> {
+				for (int j = start; j < N_READER; j += N_WRITER) {
+					explorer.execute(TIME, j);
+				}
 				for (int j = start; j < TIMES; j += N_WRITER) {
-					explorer.execute(tasks.get(j), j & MARK);
+					explorer.execute(TASK, j & MARK);
+				}
+				for (int j = start; j < N_READER; j += N_WRITER) {
+					explorer.execute(TIME, j);
 				}
 				try {
 					barrier.await();
@@ -128,5 +131,63 @@ public class MultiProducerTest {
 		barrier.await();
 		Future<?> close = explorer.close();
 		close.get();
+	}
+
+	@Test
+	public void test() throws InterruptedException, BrokenBarrierException, ExecutionException {
+		run(4, 2);
+		System.gc();
+		Thread.sleep(1000);
+		System.out.println("writer 1, reader 1");
+		run(1, 1);
+		System.gc();
+		Thread.sleep(1000);
+		System.out.println("writer 2, reader 1");
+		run(2, 1);
+		System.gc();
+		Thread.sleep(1000);
+		System.out.println("writer 4, reader 1");
+		run(4, 1);
+		System.gc();
+		Thread.sleep(1000);
+
+		System.out.println("writer 1, reader 2");
+		run(1, 2);
+		System.gc();
+		Thread.sleep(1000);
+		System.out.println("writer 2, reader 2");
+		run(2, 2);
+		System.gc();
+		Thread.sleep(1000);
+		System.out.println("writer 4, reader 2");
+		run(4, 2);
+		System.gc();
+		Thread.sleep(1000);
+
+		System.out.println("writer 2, reader 4");
+		run(2, 4);
+		System.gc();
+		Thread.sleep(1000);
+		System.out.println("writer 4, reader 4");
+		run(4, 4);
+		System.gc();
+		Thread.sleep(1000);
+		System.out.println("writer 8, reader 4");
+		run(8, 4);
+		System.gc();
+		Thread.sleep(1000);
+
+		System.out.println("writer 4, reader 8");
+		run(4, 8);
+		System.gc();
+		Thread.sleep(1000);
+		System.out.println("writer 8, reader 8");
+		run(8, 8);
+		System.gc();
+		Thread.sleep(1000);
+		System.out.println("writer 16, reader 8");
+		run(16, 8);
+		System.gc();
+		Thread.sleep(1000);
 	}
 }

@@ -15,7 +15,7 @@ import java.util.concurrent.RejectedExecutionException;
 public class BlockPolicy implements BlockingCallerHandler {
 
 	@Override
-	public void rejectedExecution(ExplorerService executor, Runnable task, Object... fences) {
-		throw new RejectedExecutionException("Task " + task.toString() + " rejected from " + executor.getName());
+	public void rejectedExecution(ExplorerService explorer, Runnable task, Object... fences) {
+		throw new RejectedExecutionException("Task " + task.toString() + " rejected from " + explorer.getName());
 	}
 }

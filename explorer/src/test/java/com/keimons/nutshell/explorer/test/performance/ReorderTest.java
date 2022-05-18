@@ -76,8 +76,8 @@ public class ReorderTest {
 					explorer.execute(() -> {
 					}, mark + (THREAD << 2));
 				}
-				Future<?> future = explorer.submit(() -> System.out.println(Thread.currentThread() + "Thread: " + (System.currentTimeMillis() - time.get())), mark + THREAD);
-				future.get();
+				explorer.execute(() -> System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get())), mark + THREAD);
+				explorer.close().get();
 				break;
 			}
 		}
@@ -102,6 +102,8 @@ public class ReorderTest {
 		}
 		Future<?> future = explorer.submit(() -> System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get())), 0);
 		future.get();
+		Future<?> close = explorer.close();
+		close.get();
 	}
 
 	private static class IndexThreadFactory implements ThreadFactory {

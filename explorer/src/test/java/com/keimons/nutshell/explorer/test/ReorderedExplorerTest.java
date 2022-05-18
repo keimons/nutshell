@@ -6,6 +6,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
 /**
  * {@link ReorderedExplorer}重排序轨道执行器测试
  *
@@ -21,7 +24,7 @@ public class ReorderedExplorerTest {
 	}
 
 	@Test
-	public void test() throws InterruptedException {
+	public void test() throws InterruptedException, ExecutionException {
 		ReorderedExplorer explorer = new ReorderedExplorer(4);
 		explorer.execute(new Runnable() {
 			@Override
@@ -88,12 +91,12 @@ public class ReorderedExplorerTest {
 			}
 		}, 5);
 
-		Thread.sleep(10000);
+		explorer.close().get();
 	}
 
 	@DisplayName("顺序测试")
 	@Test
-	public void testOrdered() throws InterruptedException {
+	public void testOrdered() throws InterruptedException, ExecutionException {
 		ThreadLocal<Integer> LOCAL = new ThreadLocal<>();
 		ReorderedExplorer explorer = new ReorderedExplorer(4);
 		explorer.execute(() -> LOCAL.set(-4), 0);
@@ -113,6 +116,7 @@ public class ReorderedExplorerTest {
 		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 1);
 		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 2);
 		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 3);
-		Thread.sleep(5000);
+		Future<?> future = explorer.close();
+		future.get();
 	}
 }

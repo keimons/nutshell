@@ -3,6 +3,13 @@ package com.keimons.nutshell.explorer;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Explorers
+ *
+ * @author houyn[monkey@keimons.com]
+ * @version 1.0
+ * @since 11
+ */
 public class Explorers {
 
 	public static ThreadFactory defaultThreadFactory() {
