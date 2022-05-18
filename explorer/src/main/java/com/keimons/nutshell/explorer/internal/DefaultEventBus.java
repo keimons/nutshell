@@ -2,7 +2,6 @@ package com.keimons.nutshell.explorer.internal;
 
 import com.keimons.nutshell.explorer.utils.XUtils;
 import jdk.internal.vm.annotation.Contended;
-import jdk.internal.vm.annotation.ForceInline;
 
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -58,7 +57,6 @@ public class DefaultEventBus<T> implements EventBus<T> {
 	AtomicBoolean mainLock = new AtomicBoolean();
 
 	@Override
-	@ForceInline
 	public long writerIndex() {
 		return writerIndex;
 	}

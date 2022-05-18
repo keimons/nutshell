@@ -1,9 +1,6 @@
 package com.keimons.nutshell.explorer.support;
 
-import com.keimons.nutshell.explorer.AbstractExplorerService;
-import com.keimons.nutshell.explorer.ExplorerService;
-import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
-import com.keimons.nutshell.explorer.TrackBarrier;
+import com.keimons.nutshell.explorer.*;
 import com.keimons.nutshell.explorer.internal.DefaultEventBus;
 import com.keimons.nutshell.explorer.utils.XUtils;
 import jdk.internal.vm.annotation.Contended;
@@ -12,7 +9,6 @@ import org.jetbrains.annotations.NotNull;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Predicate;
 
@@ -101,28 +97,25 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	/**
 	 * 任务执行器
 	 */
-	private final ReorderedWorker[] executors;
+	private final Walker[] walkers;
 
 	/**
 	 * 守望线程
 	 */
 	private final Watcher watcher;
 
-	private final LongAdder commitTasks = new LongAdder();
-	private final LongAdder publicTasks = new LongAdder();
-
 	public ReorderedExplorer(int nThreads) {
-		this(DEFAULT_NAME, nThreads, nThreads * DEFAULT_THREAD_CAPACITY, DefaultRejectedHandler, Executors.defaultThreadFactory());
+		this(DEFAULT_NAME, nThreads, nThreads * DEFAULT_THREAD_CAPACITY, DefaultRejectedHandler, Explorers.defaultThreadFactory());
 	}
 
 	public ReorderedExplorer(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler, ThreadFactory threadFactory) {
 		super(name, nThreads, rejectedHandler, threadFactory);
 		eventBus = new DefaultEventBus<>(capacity);
-		executors = new ReorderedWorker[nThreads];
-		for (int i = 0; i < nThreads; i++) {
-			ReorderedWorker executor = new ReorderedWorker(i, threadFactory);
-			executor.thread.start();
-			executors[i] = executor;
+		walkers = new Walker[nThreads];
+		for (int track = 0; track < nThreads; track++) {
+			Walker walker = new Walker(track);
+			walker.thread.start();
+			walkers[track] = walker;
 		}
 		watcher = new Watcher();
 		Thread thread = new Thread(watcher, "ExplorerWatcher-" + EXPLORER_WATCHER_INDEX.getAndIncrement());
@@ -137,7 +130,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 * @param track 轨道
 	 */
 	private void weakUp(int track) {
-		ReorderedWorker worker = executors[track];
+		Walker worker = walkers[track];
 		worker.increment();
 		if (worker.blocked) {
 			worker.blocked = false;
@@ -272,13 +265,13 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	public Future<?> close() {
 		state = CLOSE;
 		eventBus.shutdown();
-		for (ReorderedWorker worker : executors) {
+		for (Walker worker : walkers) {
 			worker.thread.interrupt();
 		}
 		return new CloseFuture((explorer) -> {
 			int sum = 0;
-			for (ReorderedWorker executor : executors) {
-				sum += executor.completedTasks;
+			for (Walker walker : walkers) {
+				sum += walker.completedTasks;
 			}
 			return sum >= eventBus.writerIndex();
 		});
@@ -295,9 +288,27 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		throw new UnsupportedOperationException();
 	}
 
-	private static final VarHandle L = XUtils.findVarHandle(ReorderedWorker.class, "stamp", int.class);
+	private static final VarHandle L = XUtils.findVarHandle(Walker.class, "stamp", int.class);
 
 	/**
+	 * <pre>
+	 *     +------+
+	 *     | read |
+	 *     +------+
+	 *        ||
+	 *    +---------+  N   +-----+
+	 *    | isTrack | ---> | END |
+	 *    +---------+      +-----+
+	 *       Y |
+	 *    +---------+  Y   +-------+
+	 *    | reorder | ---> | cache |
+	 *    +---------+      +-------+
+	 *       N |
+	 *    +-------+
+	 *    | cache |
+	 *    +-------+
+	 * </pre>
+	 * <p>
 	 * 支持重排序的环轨执行器
 	 * <p>
 	 * 轨道缓冲区意在既不添加派发线程，又能处理交叉投递问题。{@code IO线程 -> 派发线程 -> work线程}的模式能够避免任务的交叉投递，但是增加了一次额外的派发。
@@ -346,9 +357,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 * <ul>
 	 *     <li>任务发布，环形Buffer总线上发布由IO线程生成的任务。</li>
 	 *     <li>占用更多空间（n * ThreadCount），队列利用率下降。</li>
-	 *     <li>
-	 *         任务命中率降至{@code 1/nThreads}。TODO 参考链表实现，提升命中率
-	 *     </li>
+	 *     <li>任务命中率降至{@code 1/nThreads}。</li>
 	 *     <li>充分利用cpu缓存行能力下降。</li>
 	 * </ul>
 	 *
@@ -356,11 +365,20 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 * @version 1.0
 	 * @since 11
 	 **/
-	private class ReorderedWorker implements Runnable {
+	private class Walker implements Runnable {
 
+		/**
+		 * 线程运行轨道
+		 * <p>
+		 * 线程会有自己的运行轨道，并且，只会处理落在这个轨道上的节点。节点可以由多个线程处理，
+		 * 如果节点由当前线程处理，才会进行后续操作。
+		 */
 		protected final int track;
 
-		private int interceptIndex;
+		/**
+		 *
+		 */
+		private int cacheIndex;
 
 		private int barrierIndex;
 
@@ -376,7 +394,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		 * <p>
 		 * 当前线程中被屏障拦截的事件，直接缓存在执行器本地，等待拦截器释放后，再执行缓存的消息。
 		 */
-		private Node[] intercepted = new Node[8];
+		private Node[] caches = new Node[8];
 
 		/**
 		 * 执行屏障
@@ -405,25 +423,27 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		/**
-		 * 执行器
+		 * 执行器构造方法
 		 * <p>
-		 * 消息的真正执行者
+		 * {@link Node}的真正处理者。
+		 *
+		 * @param track 线程运行轨道
 		 */
-		public ReorderedWorker(int track, ThreadFactory threadFactory) {
+		public Walker(int track) {
 			this.track = track;
 			this.thread = threadFactory.newThread(this);
 		}
 
-		private void _add0(Node node) {
-			if (interceptIndex >= intercepted.length) {
-				Node[] tmp = new Node[interceptIndex << 1];
-				System.arraycopy(intercepted, 0, tmp, 0, interceptIndex);
-				intercepted = tmp;
+		private void _addCache(Node node) {
+			if (cacheIndex >= caches.length) {
+				Node[] tmp = new Node[cacheIndex << 1];
+				System.arraycopy(caches, 0, tmp, 0, cacheIndex);
+				caches = tmp;
 			}
-			intercepted[interceptIndex++] = node;
+			caches[cacheIndex++] = node;
 		}
 
-		private void _add1(Node node) {
+		private void _addBarrier(Node node) {
 			if (barrierIndex >= barriers.length) {
 				Node[] tmp = new Node[barrierIndex << 1];
 				System.arraycopy(barriers, 0, tmp, 0, barrierIndex);
@@ -432,14 +452,14 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			barriers[barrierIndex++] = node;
 		}
 
-		private void _remove0(int index) {
-			for (int i = index, limit = interceptIndex - 1; i < limit; i++) {
-				intercepted[i] = intercepted[i + 1];
+		private void _removeCache(int index) {
+			for (int i = index, limit = cacheIndex - 1; i < limit; i++) {
+				caches[i] = caches[i + 1];
 			}
-			intercepted[--interceptIndex] = null;
+			caches[--cacheIndex] = null;
 		}
 
-		private void _remove1(int index) {
+		private void _removeBarrier(int index) {
 			for (int i = index, limit = barrierIndex - 1; i < limit; i++) {
 				barriers[i] = barriers[i + 1];
 			}
@@ -456,7 +476,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			return true;
 		}
 
-		private Node take() {
+		private Node next() {
 			Node node;
 			for (; ; ) {
 				// 状态检测，如果线程池已停止
@@ -467,22 +487,22 @@ public class ReorderedExplorer extends AbstractExplorerService {
 					node = barriers[i];
 					if (!node.isIntercepted()) {
 //						Debug.info("Work-" + track + " 移除屏障：" + node.getTask());
-						_remove1(i);
+						_removeBarrier(i);
 					}
 				}
-				for (int i = 0; i < interceptIndex; i++) {
-					node = intercepted[i];
+				for (int i = 0; i < cacheIndex; i++) {
+					node = caches[i];
 					if (isReorder(node)) {
 						// 这个任务已经可以执行了，所以，直接移除
-						_remove0(i);
+						_removeCache(i);
 						if (node.tryIntercept()) {
 //							Debug.info("Work-" + track + " 恢复屏障：" + node.getTask());
-							_add1(node);
+							_addBarrier(node);
 							node.weakUp();
 						} else {
 //							Debug.info("Work-" + track + " 恢复任务：" + node.getTask());
-							if (!node.isSingle()) {
-								eventBus.finishEvent(node.getIndex());
+							if (!node.isAloneTrack()) {
+								eventBus.finishEvent(node.getSequence());
 							}
 							return node;
 						}
@@ -493,28 +513,27 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				if (readerIndex < eventBus.writerIndex()) {
 					node = eventBus.getEvent(readerIndex);
 					this.readerIndex = readerIndex + 1;
-					if (node == null) {
+					// 执行器
+					if (node == null || !node.isTrack(track)) {
 						continue;
 					}
-					if (node.isTrack(1L << track)) {
-						if (isReorder(node)) {
-							if (node.tryIntercept()) {
-								// only execute thread return event
-//								Debug.info("Work-" + track + " 增加屏障：" + node.getTask());
-								_add1(node);
-							} else {
-//								Debug.info("Work-" + track + " 执行任务：" + node.getTask());
-								eventBus.finishEvent(readerIndex);
-								return node;
-							}
+					if (isReorder(node)) {
+						if (node.tryIntercept()) {
+							// only execute thread return event
+//							Debug.info("Work-" + track + " 增加屏障：" + node.getTask());
+							_addBarrier(node);
 						} else {
-//							Debug.info("Work-" + track + " 缓存任务：" + node.getTask());
-							if (node.isSingle()) {
-								eventBus.finishEvent(readerIndex);
-							}
-							node.setIndex(readerIndex);
-							_add0(node);
+//							Debug.info("Work-" + track + " 执行任务：" + node.getTask());
+							eventBus.finishEvent(readerIndex);
+							return node;
 						}
+					} else {
+//						Debug.info("Work-" + track + " 缓存任务：" + node.getTask());
+						if (node.isAloneTrack()) {
+							eventBus.finishEvent(readerIndex);
+						}
+						node.setSequence(readerIndex);
+						_addCache(node);
 					}
 				} else {
 					blocked = true;
@@ -531,7 +550,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		@Override
 		public void run() {
 			Node node;
-			while ((node = take()) != null) {
+			while ((node = next()) != null) {
 				try {
 					node.getTask().run();
 				} finally {
@@ -551,30 +570,137 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 	private static final VarHandle VV = XUtils.findVarHandle(AbstractNode.class, "forbids", int.class);
 
+	/**
+	 * 节点
+	 * <p>
+	 * 将任务相关的信息和拦截器融合到一起，尽管没有继承自{@link Interceptor}，但依然实现了拦截器的功能。节点中包含：
+	 * <ol>
+	 *     <li>任务唯一序列（可能没有）；</li>
+	 *     <li>任务；</li>
+	 *     <li>任务屏障（可能有多个）；</li>
+	 *     <li>任务轨道（可能有多个）；</li>
+	 *     <li>拦截器信息。</li>
+	 * </ol>
+	 * 节点可以以不同的身份被多个线程持有，节点中拦截器的释放变得更加复杂且难以复用，这使得节点也变成了一次性的消耗品。
+	 * 在多线程环境下，节点有可能会被多个{@link Walker}持有，持有的形式包括：
+	 * <ul>
+	 *     <li>执行屏障，此时仅作为屏障，当拦截器释放时，屏障移除。</li>
+	 *     <li>缓存节点，当节点无法重排序到屏障之前时，将节点缓存，等待屏障释放后才能开始处理此节点。</li>
+	 *     <li>执行任务，此任务由{@link Walker}执行。</li>
+	 * </ul>
+	 * 同一个节点同时只会以一种形式被一个线程所持有，这三种状态是相互冲突的。
+	 * <p>
+	 * 同时，节点可以判断一个任务是否能由此线程处理，只有线程轨道和任务轨道重合时，节点才能由此线程处理，否则，忽略这个节点。
+	 * <p>
+	 * <p>
+	 * 注意：如果能顺利解决拦截器释放的问题，可以考虑使用对象池以提升性能。
+	 */
 	public interface Node {
 
-		void setIndex(long index);
+		/**
+		 * 设置任务的唯一序列
+		 * <p>
+		 * 每一个任务在加入队列时，会给任务分配一个自增的唯一序列。任务移除时，根据唯一序列移除任务。
+		 * <p>
+		 * 这不是必须的，例如：任务只有一个屏障，那么节点的持有是完全可预测的，此值将被忽略以节省内存。
+		 *
+		 * @param sequence 任务的唯一序列
+		 */
+		void setSequence(long sequence);
 
-		long getIndex();
+		/**
+		 * 获取任务的唯一序列
+		 *
+		 * @return 任务的唯一序列
+		 */
+		long getSequence();
 
+		/**
+		 * 获取节点中包含的任务
+		 *
+		 * @return 等待执行的任务
+		 */
 		Runnable getTask();
 
+		/**
+		 * 任务屏障的数量
+		 * <p>
+		 * Explorer的任务执行时，需要一个任务屏障，这个方法返回任务屏障数量。
+		 *
+		 * @return 任务屏障的数量
+		 */
 		int size();
 
+		/**
+		 * 尝试拦截
+		 * <p>
+		 * 尝试拦截当前线程，并返回是否拦截成功。拦截线程会发生：
+		 * <ul>
+		 *     <li>拦截成功，那么该线程无法执行此任务，应将此节点作为执行屏障，拦截后续带有相同屏障的节点。</li>
+		 *     <li>拦截失败，将由该线程执行此任务，并且在任务执行完成后，释放此拦截器。</li>
+		 * </ul>
+		 *
+		 * @return {@code true}拦截成功，{@code false}拦截失败。
+		 * @see Interceptor 拦截器的真正实现
+		 */
 		boolean tryIntercept();
 
+		/**
+		 * 是否拦截
+		 * <p>
+		 * 当拦截器生效，拦截后续所有节点中拥有相同屏障的节点进行缓存，没有相同屏障的节点重排序运行。当拦截器释放时，
+		 * 线程应放弃对于此节点的持有并移除节点。
+		 *
+		 * @return {@code true}正在拦截，{@code false}拦截器已释放。
+		 */
 		boolean isIntercepted();
 
-		boolean isTrack(long bits);
+		/**
+		 * 返回此节点是否属于这个轨道
+		 * <p>
+		 * 任务附加的屏障同时决定了任务由哪个线程处理。这个方法用于判断某一个线程能否处理这个节点。
+		 *
+		 * @param track 轨道
+		 * @return {@code true}线程处理此节点，{@code false}线程忽略此节点。
+		 */
+		boolean isTrack(int track);
 
-		boolean isSingle();
+		/**
+		 * 返回节点是否只由一个线程处理
+		 * <p>
+		 * 尽管可能线程拥有多个屏障，如果多个屏障最终哈希到一个线程，那么也将由一个线程处理。
+		 *
+		 * @return {@code true}单线程任务，{@code false}多线程任务。
+		 */
+		boolean isAloneTrack();
 
+		/**
+		 * 唤醒线程
+		 * <p>
+		 * 唤醒线程的时机：
+		 * <ul>
+		 *     <li>任务发布，当任务发布到总线后，如果处理此任务的线程（们）处于休眠状态，则唤醒此线程（们）。</li>
+		 *     <li>恢复屏障，当缓存节点恢复执行并且节点拦截成功时，唤醒处理此任务的其它线程。</li>
+		 * </ul>
+		 * 唤醒线程的实现是向该线程发放一个许可，多次/重复唤醒仅发放一个许可，当线程被唤醒后，许可被消耗。
+		 * 线程多次被唤醒，仅仅会造成一些性能上的浪费，并不会造成运行时的问题。
+		 */
 		void weakUp();
 
+		/**
+		 * 返回其它节点是否能越过此节点（屏障）重排序执行
+		 * <p>
+		 * 如果任务屏障完全不同，则可以重排序执行，这对最终的结果不会产生影响。
+		 *
+		 * @param other 尝试越过此节点的其它节点
+		 * @return {@code true}允许越过当前节点重排序运行，{@code false}禁止越过当前节点重排序运行。
+		 */
 		boolean isReorder(Node other);
 
 		/**
-		 * 释放节点
+		 * 释放节点（拦截器）
+		 * <p>
+		 * 任务执行后释放拦截器，可选实现：节点作为一次性的，无需唤醒其它线程，如果使用对象池，需要移除其它线程持有的这个节点。
 		 *
 		 * @param track 执行任务的轨道
 		 */
@@ -583,18 +709,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 	public abstract static class AbstractNode implements Node {
 
-		/**
-		 * 任务位置
-		 * <p>
-		 * 共有{@link #nThreads}条轨道，当前任务所处的轨道位置（可能不止一个）。轨道数量不超过64，所以使用{@code bits}存储。
-		 */
-		protected long bits;
-
 		protected final int size;
 
 		protected final Runnable task;
 
-		long index;
+		long sequence;
 
 		@Contended
 		protected volatile int forbids;
@@ -607,13 +726,13 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public long getIndex() {
-			return index;
+		public long getSequence() {
+			return sequence;
 		}
 
 		@Override
-		public void setIndex(long index) {
-			this.index = index;
+		public void setSequence(long sequence) {
+			this.sequence = sequence;
 		}
 
 		@Override
@@ -634,33 +753,24 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			return v > 0;
 		}
 
+		@Override
 		public boolean isIntercepted() {
 			return intercepted;
 		}
 
-		public boolean isTrack(long bits) {
-			return (this.bits & bits) != 0;
-		}
-
 		@Override
-		public boolean isSingle() {
-			return Long.bitCount(bits) <= 1;
+		public void release(int track) {
+			this.intercepted = false;
 		}
-
-		public abstract void weakUp();
-
-		public abstract boolean isReorder(Node other);
 	}
 
-	public class Node1 implements Node {
+	private class Node1 implements Node {
 
 		protected final Runnable task;
 
 		private final Object fence;
 
 		private final int track;
-
-		long index;
 
 		public Node1(Runnable task, Object fence) {
 			this.task = task;
@@ -669,13 +779,13 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public void setIndex(long index) {
-			this.index = index;
+		public void setSequence(long sequence) {
+			// do nothing
 		}
 
 		@Override
-		public long getIndex() {
-			return index;
+		public long getSequence() {
+			throw new UnsupportedOperationException();
 		}
 
 		@Override
@@ -700,12 +810,12 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public boolean isTrack(long bits) {
-			return ((1L << track) & bits) != 0;
+		public boolean isTrack(int track) {
+			return this.track == track;
 		}
 
 		@Override
-		public boolean isSingle() {
+		public boolean isAloneTrack() {
 			return true;
 		}
 
@@ -753,7 +863,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 	}
 
-	public class Node2 extends AbstractNode {
+	private class Node2 extends AbstractNode {
 
 		private final int track1;
 
@@ -769,7 +879,6 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			this.track2 = fence1.hashCode() % nThreads;
 			this.fence0 = fence0;
 			this.fence1 = fence1;
-			this.bits = (1L << this.track1) | (1L << (this.track2));
 			this.forbids = track1 == track2 ? 0 : 1;
 		}
 
@@ -797,12 +906,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				}
 				case 3: {
 					Node3 node3 = (Node3) other;
-					return !(node3.fence0.equals(fence0) ||
-							node3.fence0.equals(fence1) ||
-							node3.fence1.equals(fence0) ||
-							node3.fence1.equals(fence1) ||
-							node3.fence2.equals(fence0) ||
-							node3.fence2.equals(fence1));
+					return !(node3.fence0.equals(fence0) || node3.fence0.equals(fence1) || node3.fence1.equals(fence0) || node3.fence1.equals(fence1) || node3.fence2.equals(fence0) || node3.fence2.equals(fence1));
 				}
 				default: {
 					NodeX nodeX = (NodeX) other;
@@ -818,23 +922,28 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public boolean isSingle() {
-			return track1 == track2;
+		public boolean isTrack(int track) {
+			return track1 == track || track2 == track;
 		}
 
 		@Override
-		public void release(int track) {
-			intercepted = false;
-			if (track != track1) {
-				ReorderedExplorer.this.weakUp(track1);
-			}
-			if (track != track2) {
-				ReorderedExplorer.this.weakUp(track2);
-			}
+		public boolean isAloneTrack() {
+			return track1 == track2;
 		}
+
+//		@Override
+//		public void release(int track) {
+//			intercepted = false;
+//			if (track != track1) {
+//				ReorderedExplorer.this.weakUp(track1);
+//			}
+//			if (track != track2) {
+//				ReorderedExplorer.this.weakUp(track2);
+//			}
+//		}
 	}
 
-	public class Node3 extends AbstractNode {
+	private class Node3 extends AbstractNode {
 
 		private final int track0;
 
@@ -856,7 +965,6 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			this.fence0 = fence0;
 			this.fence1 = fence1;
 			this.fence2 = fence2;
-			this.bits = (1L << this.track0) | (1L << (this.track1)) | (1L << (this.track2));
 			if (this.track0 == this.track1 && this.track0 == this.track2) {
 				this.forbids = 0;
 			} else if (this.track0 == this.track1 || this.track0 == this.track2 || this.track1 == this.track2) {
@@ -887,20 +995,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				}
 				case 2: {
 					Node2 node2 = (Node2) other;
-					return !(node2.fence0.equals(fence0) || node2.fence0.equals(fence1) || node2.fence0.equals(fence2) ||
-							node2.fence1.equals(fence0) || node2.fence1.equals(fence1) || node2.fence1.equals(fence2));
+					return !(node2.fence0.equals(fence0) || node2.fence0.equals(fence1) || node2.fence0.equals(fence2) || node2.fence1.equals(fence0) || node2.fence1.equals(fence1) || node2.fence1.equals(fence2));
 				}
 				case 3: {
 					Node3 node3 = (Node3) other;
-					return !(node3.fence0.equals(fence0) ||
-							node3.fence0.equals(fence1) ||
-							node3.fence0.equals(fence2) ||
-							node3.fence1.equals(fence0) ||
-							node3.fence1.equals(fence1) ||
-							node3.fence1.equals(fence2) ||
-							node3.fence2.equals(fence0) ||
-							node3.fence2.equals(fence1) ||
-							node3.fence2.equals(fence2));
+					return !(node3.fence0.equals(fence0) || node3.fence0.equals(fence1) || node3.fence0.equals(fence2) || node3.fence1.equals(fence0) || node3.fence1.equals(fence1) || node3.fence1.equals(fence2) || node3.fence2.equals(fence0) || node3.fence2.equals(fence1) || node3.fence2.equals(fence2));
 				}
 				default: {
 					NodeX nodeX = (NodeX) other;
@@ -916,26 +1015,38 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		@Override
-		public boolean isSingle() {
-			return track0 == track1 && track0 == track2;
+		public boolean isTrack(int track) {
+			return track0 == track || track1 == track || track2 == track;
 		}
 
 		@Override
-		public void release(int track) {
-			intercepted = false;
-			if (track != track0) {
-				ReorderedExplorer.this.weakUp(track0);
-			}
-			if (track != track1) {
-				ReorderedExplorer.this.weakUp(track1);
-			}
-			if (track != track2) {
-				ReorderedExplorer.this.weakUp(track2);
-			}
+		public boolean isAloneTrack() {
+			return track0 == track1 && track0 == track2;
 		}
+
+//		@Override
+//		public void release(int track) {
+//			intercepted = false;
+//			if (track != track0) {
+//				ReorderedExplorer.this.weakUp(track0);
+//			}
+//			if (track != track1) {
+//				ReorderedExplorer.this.weakUp(track1);
+//			}
+//			if (track != track2) {
+//				ReorderedExplorer.this.weakUp(track2);
+//			}
+//		}
 	}
 
-	public class NodeX extends AbstractNode {
+	private class NodeX extends AbstractNode {
+
+		/**
+		 * 任务位置
+		 * <p>
+		 * 共有{@link #nThreads}条轨道，当前任务所处的轨道位置（可能不止一个）。轨道数量不超过64，所以使用{@code bits}存储。
+		 */
+		protected long bits;
 
 		private final Object[] fences;
 
@@ -951,10 +1062,20 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		@Override
 		public void weakUp() {
 			for (int i = 0; i < nThreads; i++) {
-				if (isTrack(i)) {
+				if ((bits & (1L << i)) != 0) {
 					ReorderedExplorer.this.weakUp(i);
 				}
 			}
+		}
+
+		@Override
+		public boolean isTrack(int track) {
+			return (bits & (1L << track)) != 0;
+		}
+
+		@Override
+		public boolean isAloneTrack() {
+			return Long.bitCount(bits) <= 1;
 		}
 
 		/**
@@ -1004,15 +1125,15 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			}
 		}
 
-		@Override
-		public void release(int track) {
-			intercepted = false;
-			for (int i = 0; i < nThreads; i++) {
-				if (isTrack(i)) {
-					ReorderedExplorer.this.weakUp(i);
-				}
-			}
-		}
+//		@Override
+//		public void release(int track) {
+//			intercepted = false;
+//			for (int i = 0; i < nThreads; i++) {
+//				if ((bits & (1L << i)) != 0 && i != track) {
+//					ReorderedExplorer.this.weakUp(i);
+//				}
+//			}
+//		}
 	}
 	// endregion
 

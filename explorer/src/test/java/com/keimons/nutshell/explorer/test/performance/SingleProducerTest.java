@@ -7,8 +7,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -63,11 +65,12 @@ public class SingleProducerTest {
 
 	@DisplayName("Explorer测试")
 	@Test
-	public void testExplorer() throws InterruptedException {
+	public void testExplorer() throws InterruptedException, ExecutionException {
 		ReorderedExplorer explorer = new ReorderedExplorer(1);
 		for (int i = 0; i < TIMES; i++) {
 			explorer.execute(tasks.get(i), i & 0x1);
 		}
-		Thread.sleep(2000);
+		Future<?> future = explorer.close();
+		future.get();
 	}
 }
