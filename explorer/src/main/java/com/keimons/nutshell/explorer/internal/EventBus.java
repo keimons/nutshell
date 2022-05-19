@@ -1,19 +1,31 @@
 package com.keimons.nutshell.explorer.internal;
 
-import jdk.internal.vm.annotation.ForceInline;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * 事件总线
  * <p>
- * 这是一个定制化的事件总线，事件总线维护一个对象数组和一个{@link #writerIndex()}写入位置。
- * 事件总线带有缓存功能，使用方法：
+ * 这是一个定制化的事件总线，事件总线维护一个消息队列和一个{@link #writerIndex()}写入位置，
+ * 但是，并不维护读取位置，读取位置由读取者自行维护，事件总线而是查找下一个写入位置是否可用，
+ * 如果下一个写入位置可用，则直接在该位置写入事件，如果不可用，则调用等待策略。
+ * <p>
+ * 事件总线的使用：
+ * <ol>
+ *     <li>发布事件到事件总线；</li>
+ *     <li>消费线程读取事件总线中的事件；</li>
+ *     <li>在事件总线中移除事件。</li>
+ * </ol>
+ * 事件总线设计可以是多种多样的，例如：
  * <ul>
- *     <li>在事件总线中获取事件对象。</li>
- *     <li>事件内容填入事件对象中。</li>
- *     <li>发布事件到事件总线。</li>
- *     <li>多线程读取事件总线中的事件，并判断是否为关注事件。</li>
- *     <li>归还事件对象。</li>
+ *     <li>发布订阅，事件总线可以采用发布订阅模式，在事件发布时将其投递给对应的消费者。</li>
+ *     <li>消息队列，将事件发布在消费队列，等待消费线程读取队列中的内容。</li>
  * </ul>
+ * 事件总线也许只是一个抽象的概念，它也许并不是真实存在的，我们仅仅是希望能够有一个“中心”的地方，
+ * 将所有的事件存放在中心，它没有FIFO之类的概念，需要的“人”在事件总线读取和销毁事件。
+ * 它的设计就像是在漫步，遇到不同的风景，走走停停。
+ * <p>
+ * <p>
+ * Explorer没有采用发布订阅的模式，为其保留了夸进程事件总线的可能性。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
@@ -22,11 +34,13 @@ import jdk.internal.vm.annotation.ForceInline;
 public interface EventBus<T> {
 
 	/**
-	 * 获取写入位置
+	 * 获取当前写入位置
+	 * <p>
+	 * 每个消费线程都会自行维护一个读取位置，当读取位置早于写入位置时，才能在事件总线中读出正确的事件。
+	 * 遗憾的是，我们总是需要一个“锁”，来保证写入位置的可行性。
 	 *
-	 * @return 写入位置
+	 * @return 当前写入位置
 	 */
-	@ForceInline
 	long writerIndex();
 
 	/**
@@ -38,30 +52,43 @@ public interface EventBus<T> {
 	boolean publishEvent(T event);
 
 	/**
-	 * 根据位置索引获取一个事件
+	 * 返回事件序列对应的事件
+	 * <p>
+	 * 根据事件序列在事件总线中查找并返回事件。
 	 *
-	 * @param index 位置索引
-	 * @return 该位置所存储的事件
+	 * @param sequence 事件序列
+	 * @return 事件序列对应的事件，如果事件已经被移除，则有可能为空。
 	 */
-	T getEvent(long index);
+	@Nullable T getEvent(long sequence);
 
 	/**
-	 * 完成事件
+	 * 移除事件
+	 * <p>
+	 * 注意，不是完成，仅仅代表事件被消费者线程消耗了，并不代表事件已经被完成。任何一个事件，
+	 * 最终只会被一个线程消费，同时也意味着由该线程调用此方法移除事件总线中的这个事件。
+	 * <p>
+	 * 事件的移除并不代表事件完成，有可能是该线程判断事件由该线程完成，将事件缓存到线程本地。
 	 *
-	 * @param index 事件索引
+	 * @param sequence 事件序列
 	 */
-	void finishEvent(long index);
+	void removeEvent(long sequence);
 
 	/**
-	 * 测试一个标志位是否已结束
+	 * 返回该读取位置是否已达队尾
+	 * <p>
+	 * 当事件总线关闭后，此方法才真正有效，否则此方法应该返回{@code false}。
+	 * 当关闭事件总线后，并且已经读到队尾，则代表该线程在事件总线上已经没有任何可以读取的事件了。
 	 *
-	 * @param writerIndex 下标
-	 * @return 是否已结束
+	 * @param readerIndex 读取位置
+	 * @return {@code true}已达队尾，{@code false}未达队尾
 	 */
-	boolean testWriterIndex(long writerIndex);
+	boolean eof(long readerIndex);
 
 	/**
-	 * 关闭环形缓冲区
+	 * 关闭事件总线
+	 * <p>
+	 * 事件总线的关闭并不会移除任何事件，仅仅是将事件总线的状态修改为不可写入状态。
+	 * 事件总线中的事件，只能由消费者进行消费。
 	 */
 	void shutdown();
 }

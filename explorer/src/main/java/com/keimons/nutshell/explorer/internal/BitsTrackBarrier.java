@@ -134,11 +134,6 @@ public class BitsTrackBarrier implements TrackBarrier {
 	}
 
 	@Override
-	public void setIntercepted(boolean intercepted) {
-		this.intercepted = intercepted;
-	}
-
-	@Override
 	public boolean isIntercepted() {
 		return intercepted;
 	}

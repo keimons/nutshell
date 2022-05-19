@@ -1,6 +1,7 @@
 package com.keimons.nutshell.explorer.test.performance;
 
 import com.keimons.nutshell.explorer.support.ReorderedExplorer;
+import com.keimons.nutshell.explorer.test.Task;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.*;
@@ -17,12 +18,12 @@ public class MultiProducerTest {
 	/**
 	 * 生产者数量
 	 */
-	private int N_WRITER = 4;
+	private int N_WRITER = 2;
 
 	/**
 	 * 消费者数量
 	 */
-	private int N_READER = 2;
+	private int N_READER = 1;
 
 	/**
 	 * Explorer执行key生成规则
@@ -128,6 +129,8 @@ public class MultiProducerTest {
 			});
 			thread.start();
 		}
+		Thread.sleep(2500);
+		System.out.println("done.");
 		barrier.await();
 		Future<?> close = explorer.close();
 		close.get();
@@ -138,51 +141,63 @@ public class MultiProducerTest {
 		run(4, 2);
 		System.gc();
 		Thread.sleep(1000);
+
 		System.out.println("writer 1, reader 1");
 		run(1, 1);
+		System.gc();
 		System.gc();
 		Thread.sleep(1000);
 		System.out.println("writer 2, reader 1");
 		run(2, 1);
 		System.gc();
+		System.gc();
 		Thread.sleep(1000);
 		System.out.println("writer 4, reader 1");
 		run(4, 1);
+		System.gc();
 		System.gc();
 		Thread.sleep(1000);
 
 		System.out.println("writer 1, reader 2");
 		run(1, 2);
 		System.gc();
+		System.gc();
 		Thread.sleep(1000);
 		System.out.println("writer 2, reader 2");
 		run(2, 2);
 		System.gc();
+		System.gc();
 		Thread.sleep(1000);
 		System.out.println("writer 4, reader 2");
 		run(4, 2);
+		System.gc();
 		System.gc();
 		Thread.sleep(1000);
 
 		System.out.println("writer 2, reader 4");
 		run(2, 4);
 		System.gc();
+		System.gc();
 		Thread.sleep(1000);
 		System.out.println("writer 4, reader 4");
 		run(4, 4);
 		System.gc();
+		System.gc();
 		Thread.sleep(1000);
 		System.out.println("writer 8, reader 4");
 		run(8, 4);
+		System.gc();
 		System.gc();
 		Thread.sleep(1000);
 
 		System.out.println("writer 4, reader 8");
 		run(4, 8);
 		System.gc();
+		System.gc();
 		Thread.sleep(1000);
 		System.out.println("writer 8, reader 8");
 		run(8, 8);
+		System.gc();
 		System.gc();
 		Thread.sleep(1000);
 		System.out.println("writer 16, reader 8");

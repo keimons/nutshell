@@ -1,4 +1,4 @@
-package com.keimons.nutshell.explorer.test.performance;
+package com.keimons.nutshell.explorer.test;
 
 /**
  * 性能测试使用的空任务
