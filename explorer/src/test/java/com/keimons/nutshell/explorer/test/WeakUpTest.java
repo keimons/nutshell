@@ -1,0 +1,36 @@
+package com.keimons.nutshell.explorer.test;
+
+import com.keimons.nutshell.explorer.support.ReorderedExplorer;
+import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+/**
+ * 线程唤醒测试
+ *
+ * @author houyn[monkey@keimons.com]
+ * @version 1.0
+ * @since 11
+ **/
+public class WeakUpTest {
+
+	private static final Runnable TASK = Task::new;
+
+	@Test
+	public void test() throws ExecutionException, InterruptedException {
+		ReorderedExplorer explorer = new ReorderedExplorer(2);
+		for (int i = 0; i < 2_0000_0000; i++) {
+			if ((i & 0B11) == 0B11) {
+				Future<?> future = explorer.submit(TASK, 0);
+				future.get();
+			} else {
+				explorer.execute(TASK, 0);
+			}
+			if (i != 0 && i % 10_0000 == 0) {
+				System.out.println(i);
+			}
+		}
+		explorer.close();
+	}
+}
