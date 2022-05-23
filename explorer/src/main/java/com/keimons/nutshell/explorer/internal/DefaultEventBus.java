@@ -41,6 +41,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class DefaultEventBus<T> implements EventBus<T> {
 
 	/**
+	 * 默认最大队列长度
+	 */
+	private static final long DEFAULT_LIMIT = Long.MAX_VALUE;
+
+	/**
 	 * 容量
 	 * <p>
 	 * 缓冲区没有设计链表之前，这个容量就是缓冲区的最大容量。尽管容量达到了最大，特殊的消费形式，
@@ -88,11 +93,11 @@ public class DefaultEventBus<T> implements EventBus<T> {
 	 * 允许写入的最后一个位置
 	 * <p>
 	 * 通过判断{@code writerIndex < limitIndex}时，可以向缓冲区中写入数据。
-	 * 在运行时，这个值固定为{@link Long#MAX_VALUE}，当关闭缓冲区时，此值更新为{@link #writerIndex}。
+	 * 在运行时，这个值固定为{@link #DEFAULT_LIMIT}，当关闭缓冲区时，此值更新为{@link #writerIndex}。
 	 * <p>
 	 * 缓冲区中允许写入最多2<sup>63</sup>-1(9223372036854775807)个元素，完全足够。
 	 */
-	volatile long limitIndex = Long.MAX_VALUE;
+	volatile long limitIndex = DEFAULT_LIMIT;
 
 	@SuppressWarnings("unchecked")
 	public DefaultEventBus(int capacity) {
@@ -171,6 +176,9 @@ public class DefaultEventBus<T> implements EventBus<T> {
 
 	@Override
 	public void shutdown() {
+		if (limitIndex != DEFAULT_LIMIT) {
+			return;
+		}
 		while (true) {
 			long sequence = writerIndex;
 			int offset = (int) (sequence & mark);
@@ -181,6 +189,9 @@ public class DefaultEventBus<T> implements EventBus<T> {
 					// rollback state
 					node.state = Node.STATE_FREE;
 					continue;
+				}
+				if (limitIndex != DEFAULT_LIMIT) {
+					return;
 				}
 				limitIndex = writerIndex;
 				return;

@@ -81,8 +81,13 @@ public class QueueExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public Future<?> close() {
-		return null;
+	public void close() {
+
+	}
+
+	@Override
+	public void close(RunnableFuture<?> onClose) {
+
 	}
 
 	@Override

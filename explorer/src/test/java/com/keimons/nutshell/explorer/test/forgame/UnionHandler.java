@@ -1,6 +1,7 @@
 package com.keimons.nutshell.explorer.test.forgame;
 
-import com.keimons.deepjson.JsonObject;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 组织相关
@@ -12,26 +13,63 @@ import com.keimons.deepjson.JsonObject;
 @MsgGroup(opCode = 1000, desc = "组织相关协议", playerFence = true, strategies = UnionHandler.UnionIdFencePolicy.class)
 public class UnionHandler {
 
-	@MsgCode(opCode = 1001, desc = "查找组织", strategies = {})
-	public void findUnion(Player player, JsonObject json) {
+	private static final Map<String, Union> unions = new HashMap<>();
 
+	@MsgCode(opCode = 1001, desc = "查找组织", strategies = {})
+	public Object findUnion(Player player, JsonObject json) {
+		return unions;
 	}
 
 	@MsgCode(opCode = 1002, desc = "加入组织")
-	public void joinUnion(Player player, JsonObject json) {
-
+	public Object joinUnion(Player player, JsonObject json) {
+		String unionId = json.getString("unionId");
+		Union union = unions.get(unionId);
+		int memberCount = union.getMemberCount();
+		if (memberCount < 100) {
+			union.addMember(player);
+			player.setUnionId(unionId);
+			return true;
+		} else {
+			return false;
+		}
 	}
 
-	@MsgCode(opCode = 1003, desc = "退出组织")
-	public void exitUnion(Player player, JsonObject json) {
-
+	@MsgCode(opCode = 1003, desc = "剔出组织", strategies = {UnionIdByPlayerFencePolicy.class, TargetIdFencePolicy.class})
+	public Object exitUnion(Player player, JsonObject json) {
+		String unionId = player.getUnionId();
+		String targetId = json.getString("targetId");
+		Union union = unions.get(unionId);
+		if (union != null) {
+			Player member = union.getMember(targetId);
+			member.setUnionId(null);
+			return union.removeMember(targetId);
+		} else {
+			return false;
+		}
 	}
 
 	public static class UnionIdFencePolicy implements FenceStrategy {
 
 		@Override
-		public Object getFence(JsonObject json) {
-			return json.get("unionId");
+		public Object getFence(Player player, JsonObject json) {
+			return json.getString("unionId");
+		}
+	}
+
+	public static class UnionIdByPlayerFencePolicy implements FenceStrategy {
+
+		@Override
+		public Object getFence(Player player, JsonObject json) {
+			// check
+			return player.getUnionId();
+		}
+	}
+
+	public static class TargetIdFencePolicy implements FenceStrategy {
+
+		@Override
+		public Object getFence(Player player, JsonObject json) {
+			return json.getString("targetId");
 		}
 	}
 }

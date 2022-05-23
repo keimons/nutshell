@@ -69,8 +69,13 @@ public class DirectExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public Future<?> close() {
-		return new FinishFuture();
+	public void close() {
+		// do nothing
+	}
+
+	@Override
+	public void close(RunnableFuture<?> onClose) {
+		onClose.run();
 	}
 
 	@Override

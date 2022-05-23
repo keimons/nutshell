@@ -18,12 +18,12 @@ public class MultiProducerTest {
 	/**
 	 * 生产者数量
 	 */
-	private int N_WRITER = 2;
+	private int N_WRITER = 4;
 
 	/**
 	 * 消费者数量
 	 */
-	private int N_READER = 1;
+	private int N_READER = 2;
 
 	/**
 	 * Explorer执行key生成规则
@@ -129,11 +129,10 @@ public class MultiProducerTest {
 			});
 			thread.start();
 		}
-		Thread.sleep(2500);
-		System.out.println("done.");
 		barrier.await();
-		Future<?> close = explorer.close();
-		close.get();
+		FutureTask<?> onClose = new FutureTask<>(() -> System.out.println("线程池已关闭"), null);
+		explorer.close(onClose);
+		onClose.get();
 	}
 
 	@Test
@@ -202,6 +201,13 @@ public class MultiProducerTest {
 		Thread.sleep(1000);
 		System.out.println("writer 16, reader 8");
 		run(16, 8);
+		System.gc();
+		Thread.sleep(1000);
+	}
+
+	@Test
+	public void single() throws BrokenBarrierException, ExecutionException, InterruptedException {
+		run(4, 4);
 		System.gc();
 		Thread.sleep(1000);
 	}
