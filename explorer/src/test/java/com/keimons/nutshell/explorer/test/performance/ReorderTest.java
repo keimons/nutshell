@@ -8,7 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -25,7 +25,7 @@ public class ReorderTest {
 
 	private static final int THREAD = 4;
 
-	private static final int BARRIER = 100;
+	private static final int BARRIER = 5;
 
 	/**
 	 * 测试次数
@@ -77,7 +77,6 @@ public class ReorderTest {
 					}, mark + (THREAD << 2));
 				}
 				explorer.execute(() -> System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get())), mark + THREAD);
-				explorer.close().get();
 				break;
 			}
 		}
@@ -98,12 +97,12 @@ public class ReorderTest {
 				} else {
 					LOCAL.set(value);
 				}
-			}, 0);
+			}, 0, 1);
 		}
-		Future<?> future = explorer.submit(() -> System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get())), 0);
-		future.get();
-		Future<?> close = explorer.close();
-		close.get();
+		explorer.execute(() -> System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get())), 0);
+		FutureTask<?> onClose = new FutureTask<>(() -> System.out.println("线程池已关闭"), null);
+		explorer.close(onClose);
+		onClose.get();
 	}
 
 	private static class IndexThreadFactory implements ThreadFactory {

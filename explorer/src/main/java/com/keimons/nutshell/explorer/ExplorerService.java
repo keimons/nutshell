@@ -2,6 +2,7 @@ package com.keimons.nutshell.explorer;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
+import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
@@ -148,10 +149,12 @@ public interface ExplorerService {
 
 	boolean isShutdown();
 
+	void close();
+
 	/**
 	 * 关闭线程池
 	 */
-	Future<?> close();
+	void close(RunnableFuture<?> onClose);
 
 	/**
 	 * 关闭线程池

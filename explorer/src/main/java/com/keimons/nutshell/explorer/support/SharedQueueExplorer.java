@@ -210,25 +210,20 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 	}
 
 	@Override
-	public Future<?> close() {
-		return null;
+	public void close() {
+		super.shutdown();
+	}
+
+	RunnableFuture<?> onClose;
+
+	@Override
+	public void close(RunnableFuture<?> onClose) {
+		super.shutdown();
 	}
 
 	@Override
 	public void shutdown() {
 		super.shutdown();
-		if (blockingCaller) {
-			try {
-				lock.lockInterruptibly();
-				try {
-					notFull.signalAll();
-				} finally {
-					lock.unlock();
-				}
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-		}
 	}
 
 	/**

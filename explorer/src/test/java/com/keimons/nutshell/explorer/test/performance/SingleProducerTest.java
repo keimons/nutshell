@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -70,7 +70,8 @@ public class SingleProducerTest {
 		for (int i = 0; i < TIMES; i++) {
 			explorer.execute(tasks.get(i), i & 0x1);
 		}
-		Future<?> future = explorer.close();
-		future.get();
+		FutureTask<?> onClose = new FutureTask<>(() -> System.out.println("线程池已关闭"), null);
+		explorer.close(onClose);
+		onClose.get();
 	}
 }

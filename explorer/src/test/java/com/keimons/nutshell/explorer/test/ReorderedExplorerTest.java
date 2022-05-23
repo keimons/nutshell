@@ -7,7 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 
 /**
  * {@link ReorderedExplorer}重排序轨道执行器测试
@@ -90,8 +90,9 @@ public class ReorderedExplorerTest {
 				return "重排任务(KEY-5)";
 			}
 		}, 5);
-
-		explorer.close().get();
+		FutureTask<?> onClose = new FutureTask<>(() -> System.out.println("线程池已关闭"), null);
+		explorer.close(onClose);
+		onClose.get();
 	}
 
 	@DisplayName("顺序测试")
@@ -116,7 +117,8 @@ public class ReorderedExplorerTest {
 		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 1);
 		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 2);
 		explorer.execute(() -> System.out.println(Thread.currentThread() + ": done."), 3);
-		Future<?> future = explorer.close();
-		future.get();
+		FutureTask<?> onClose = new FutureTask<>(() -> System.out.println("线程池已关闭"), null);
+		explorer.close(onClose);
+		onClose.get();
 	}
 }

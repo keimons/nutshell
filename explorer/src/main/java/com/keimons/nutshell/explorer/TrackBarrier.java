@@ -84,15 +84,6 @@ public interface TrackBarrier extends Interceptor {
 	 */
 	void init(Object... fences);
 
-	/**
-	 * 获取所有hash目标值
-	 *
-	 * @return hash目标值
-	 * @deprecated 过时的设计
-	 */
-	@Deprecated
-	int[] hashes();
-
 	boolean isTrack(long bits);
 
 	/**

@@ -139,18 +139,6 @@ public class BitsTrackBarrier implements TrackBarrier {
 	}
 
 	@Override
-	public int[] hashes() {
-		int[] result = new int[Long.bitCount(bits)];
-		int index = 0;
-		for (int i = 0; i < nTracks; i++) {
-			if ((bits & (1L << i)) != 0) {
-				result[index++] = i;
-			}
-		}
-		return result;
-	}
-
-	@Override
 	public boolean isTrack(long bits) {
 		return (this.bits & bits) != 0;
 	}

@@ -5,7 +5,6 @@ import com.keimons.nutshell.explorer.*;
 import com.keimons.nutshell.explorer.internal.DefaultEventBus;
 import com.keimons.nutshell.explorer.utils.XUtils;
 import jdk.internal.vm.annotation.Contended;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import sun.misc.Unsafe;
 
@@ -13,8 +12,9 @@ import java.lang.invoke.VarHandle;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.Predicate;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 环轨执行器
@@ -55,7 +55,7 @@ import java.util.function.Predicate;
  *              |      |      |      |
  *            task3  task1  task2  task0
  * </pre>
- * 由IO线程生成任务信息（考虑对象池）并发布在环形Buffer总线上。环形buffer中发布的，不再是单个任务，而是包含Key组的任务，Key组中可能包含一个或多个Key。
+ * 由IO线程生成任务信息并发布在环形Buffer总线上。环形buffer中发布的，不再是单个任务，而是包含Key组的任务，Key组中可能包含一个或多个Key。
  * 仅仅维护一个全局的{@code writeIndex}，每个线程维护自己的{@code readIndex}，只要{@code readIndex < writeIndex}
  * 则可以继续向下读取，如果当前位置为空，则表明此任务不是这个线程关注的任务，跳过执行，联合{@link TrackBarrier}使用。
  * <p>
@@ -65,9 +65,7 @@ import java.util.function.Predicate;
  * <ul>
  *     <li>任务发布，环形Buffer总线上发布由IO线程生成的任务。</li>
  *     <li>占用更多空间（n * ThreadCount），队列利用率下降。</li>
- *     <li>
- *         任务命中率降至{@code 1/ThreadCount}。TODO 参考链表实现，提升命中率
- *     </li>
+ *     <li>任务命中率降至{@code 1/ThreadCount}。</li>
  *     <li>充分利用cpu缓存行能力下降。</li>
  * </ul>
  *
@@ -91,6 +89,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 */
 	public static final String DEFAULT_NAME = "ReorderedExplorer";
 
+	private final Lock main = new ReentrantLock();
+
 	/**
 	 * 事件总线
 	 * <p>
@@ -108,6 +108,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 */
 	private final Watcher watcher;
 
+	private final Thread dt;
+
 	public ReorderedExplorer(int nThreads) {
 		this(DEFAULT_NAME, nThreads, nThreads * DEFAULT_THREAD_CAPACITY, DefaultRejectedHandler, Explorers.defaultThreadFactory());
 	}
@@ -122,10 +124,10 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			walkers[track] = walker;
 		}
 		watcher = new Watcher();
-//		Thread thread = new Thread(watcher, "ExplorerWatcher-" + EXPLORER_WATCHER_INDEX.getAndIncrement());
-//		thread.setDaemon(true);
-//		thread.setPriority(Thread.MIN_PRIORITY);
-//		thread.start();
+		dt = new Thread(watcher, "ExplorerWatcher-" + EXPLORER_WATCHER_INDEX.getAndIncrement());
+		dt.setDaemon(true);
+		dt.setPriority(Thread.MIN_PRIORITY);
+		dt.start();
 	}
 
 	/**
@@ -267,19 +269,33 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public Future<?> close() {
-		state = CLOSE;
-		eventBus.shutdown();
-		for (Walker worker : walkers) {
-			worker.thread.interrupt();
-		}
-		return new CloseFuture((explorer) -> {
-			int sum = 0;
-			for (Walker walker : walkers) {
-				sum += walker.completedTasks;
+	public void close() {
+		close(null);
+	}
+
+	@Override
+	public void close(RunnableFuture<?> onClose) {
+		main.lock();
+		try {
+			if (onClose != null) {
+				watcher.tasks.add(onClose);
 			}
-			return sum >= eventBus.writerIndex();
-		});
+			if (state == RUNNING) {
+				state = CLOSE;
+			}
+			eventBus.shutdown();
+			for (Walker worker : walkers) {
+				worker.thread.interrupt();
+			}
+		} finally {
+			main.unlock();
+		}
+		// recheck 确保任务能够顺利执行
+		if (state >= TERMINATED && onClose != null) {
+			if (watcher.tasks.remove(onClose)) {
+				onClose.run();
+			}
+		}
 	}
 
 	/**
@@ -292,6 +308,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	public void shutdown() {
 		throw new UnsupportedOperationException();
 	}
+
+	// region Walker
 
 	/**
 	 * 支持重排序的环轨执行器
@@ -487,7 +505,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			Node node;
 			for (; ; ) {
 				// 状态检测，如果线程池已停止
-				if (state >= CLOSE && eventBus.eof(readerIndex)) {
+				if (state >= CLOSE && eventBus.eof(readerIndex) && barrierIndex <= 0 && cacheIndex <= 0) {
 					return null;
 				}
 				for (int i = 0; i < barrierIndex; i++) {
@@ -566,6 +584,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 					node.release();
 				}
 			}
+			exit();
+		}
+
+		public void exit() {
+			LockSupport.unpark(dt);
 		}
 
 		@Override
@@ -573,6 +596,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			return "Walker-" + track;
 		}
 	}
+	// endregion
 
 	// region Node
 
@@ -950,17 +974,17 @@ public class ReorderedExplorer extends AbstractExplorerService {
 					throw new IllegalStateException();
 				}
 				case 2: {
-					Node2 node2 = (Node2) other;
-					return !(node2.fence0.equals(fence0) || node2.fence0.equals(fence1) || node2.fence1.equals(fence0) || node2.fence1.equals(fence1));
+					Node2 node = (Node2) other;
+					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence1.equals(fence0) || node.fence1.equals(fence1));
 				}
 				case 3: {
-					Node3 node3 = (Node3) other;
-					return !(node3.fence0.equals(fence0) || node3.fence0.equals(fence1) || node3.fence1.equals(fence0) || node3.fence1.equals(fence1) || node3.fence2.equals(fence0) || node3.fence2.equals(fence1));
+					Node3 node = (Node3) other;
+					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence1.equals(fence0) || node.fence1.equals(fence1) || node.fence2.equals(fence0) || node.fence2.equals(fence1));
 				}
 				default: {
-					NodeX nodeX = (NodeX) other;
-					for (int i = 0, count = nodeX.size; i < count; i++) {
-						Object v = nodeX.fences[i];
+					NodeX node = (NodeX) other;
+					for (int i = 0; i < node.size; i++) {
+						Object v = node.fences[i];
 						if (v.equals(fence0) || v.equals(fence1)) {
 							return false;
 						}
@@ -1029,17 +1053,17 @@ public class ReorderedExplorer extends AbstractExplorerService {
 					throw new IllegalStateException();
 				}
 				case 2: {
-					Node2 node2 = (Node2) other;
-					return !(node2.fence0.equals(fence0) || node2.fence0.equals(fence1) || node2.fence0.equals(fence2) || node2.fence1.equals(fence0) || node2.fence1.equals(fence1) || node2.fence1.equals(fence2));
+					Node2 node = (Node2) other;
+					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence0.equals(fence2) || node.fence1.equals(fence0) || node.fence1.equals(fence1) || node.fence1.equals(fence2));
 				}
 				case 3: {
-					Node3 node3 = (Node3) other;
-					return !(node3.fence0.equals(fence0) || node3.fence0.equals(fence1) || node3.fence0.equals(fence2) || node3.fence1.equals(fence0) || node3.fence1.equals(fence1) || node3.fence1.equals(fence2) || node3.fence2.equals(fence0) || node3.fence2.equals(fence1) || node3.fence2.equals(fence2));
+					Node3 node = (Node3) other;
+					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence0.equals(fence2) || node.fence1.equals(fence0) || node.fence1.equals(fence1) || node.fence1.equals(fence2) || node.fence2.equals(fence0) || node.fence2.equals(fence1) || node.fence2.equals(fence2));
 				}
 				default: {
-					NodeX nodeX = (NodeX) other;
-					for (int i = 0, count = nodeX.size; i < count; i++) {
-						Object v = nodeX.fences[i];
+					NodeX node = (NodeX) other;
+					for (int i = 0; i < node.size; i++) {
+						Object v = node.fences[i];
 						if (v.equals(fence0) || v.equals(fence1) || v.equals(fence2)) {
 							return false;
 						}
@@ -1129,7 +1153,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				}
 				default: {
 					NodeX node = (NodeX) other;
-					for (int i = 0, count = node.size; i < count; i++) {
+					for (int i = 0; i < node.size; i++) {
 						Object v = node.fences[i];
 						for (int j = 0; j < size; j++) {
 							if (v.equals(fences[j])) {
@@ -1149,57 +1173,41 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 */
 	public class Watcher implements Runnable {
 
-		volatile Runnable task = null;
+		Thread thread;
+
+		volatile BlockingQueue<RunnableFuture<?>> tasks = new LinkedBlockingQueue<>();
 
 		@Override
 		public void run() {
 			while (state < TERMINATED) {
-				if (task != null) {
-					task.run();
+				if (state >= CLOSE && isDone()) {
+					state = TERMINATED;
+					System.out.println("all done.");
+					for (; ; ) {
+						RunnableFuture<?> task = tasks.poll();
+						if (task == null) {
+							break;
+						}
+						task.run();
+					}
+				} else {
+					// park 0.1 ms
+					LockSupport.parkNanos(10_000_000);
 				}
-				// park 1 ms
-				LockSupport.parkNanos(1_000_000);
 			}
 		}
-	}
 
-	public class CloseFuture implements Future<Object> {
-
-		volatile boolean cancel = false;
-
-		Predicate<ExplorerService> tester;
-
-		public CloseFuture(Predicate<ExplorerService> tester) {
-			this.tester = tester;
-		}
-
-		@Override
-		public boolean cancel(boolean mayInterruptIfRunning) {
-			cancel = true;
-			return true;
-		}
-
-		@Override
-		public boolean isCancelled() {
-			return cancel;
-		}
-
-		@Override
-		public boolean isDone() {
-			return false;
-		}
-
-		@Override
-		public Object get() throws InterruptedException, ExecutionException {
-			while (!tester.test(ReorderedExplorer.this)) {
-				Thread.sleep(1);
+		/**
+		 * 线程是否全部执行完成
+		 *
+		 * @return {@code true}全部执行完成，{@code false}仍有运行中的线程。
+		 */
+		private boolean isDone() {
+			int sum = 0;
+			for (Walker walker : walkers) {
+				sum += walker.completedTasks;
 			}
-			return null;
-		}
-
-		@Override
-		public Object get(long timeout, @NotNull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-			throw new UnsupportedOperationException();
+			return sum >= eventBus.writerIndex();
 		}
 	}
 
@@ -1230,6 +1238,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		 */
 		volatile int stamp;
 
+		/**
+		 * 锁的持有者线程是否阻塞
+		 */
 		volatile boolean blocked;
 
 		void increment() {
