@@ -9,6 +9,8 @@ import org.jetbrains.annotations.Nullable;
 import sun.misc.Unsafe;
 
 import java.lang.invoke.VarHandle;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
@@ -108,8 +110,6 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 */
 	private final Watcher watcher;
 
-	private final Thread dt;
-
 	public ReorderedExplorer(int nThreads) {
 		this(DEFAULT_NAME, nThreads, nThreads * DEFAULT_THREAD_CAPACITY, DefaultRejectedHandler, Explorers.defaultThreadFactory());
 	}
@@ -124,10 +124,6 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			walkers[track] = walker;
 		}
 		watcher = new Watcher();
-		dt = new Thread(watcher, "ExplorerWatcher-" + EXPLORER_WATCHER_INDEX.getAndIncrement());
-		dt.setDaemon(true);
-		dt.setPriority(Thread.MIN_PRIORITY);
-		dt.start();
 	}
 
 	/**
@@ -143,6 +139,15 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			lock.blocked = false;
 			LockSupport.unpark(worker.thread);
 		}
+	}
+
+	/**
+	 * 获取所有任务
+	 *
+	 * @return 所有任务
+	 */
+	private List<Runnable> takeTasks() {
+		return null;
 	}
 
 	@Override
@@ -284,9 +289,6 @@ public class ReorderedExplorer extends AbstractExplorerService {
 				state = CLOSE;
 			}
 			eventBus.shutdown();
-			for (Walker worker : walkers) {
-				worker.thread.interrupt();
-			}
 		} finally {
 			main.unlock();
 		}
@@ -305,8 +307,33 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 * @throws UnsupportedOperationException 不支持的{@code shutdown()}调用
 	 */
 	@Override
-	public void shutdown() {
-		throw new UnsupportedOperationException();
+	public void shutdown(@Nullable ConsumerFuture<List<Runnable>> consumer) {
+		main.lock();
+		try {
+			if (state == CLOSE) {
+				throw new IllegalStateException("Explorer closing.");
+			}
+			if (state == RUNNING) {
+				state = SHUTDOWN;
+			}
+			eventBus.shutdown();
+			for (Walker walker : walkers) {
+				if (!walker.thread.isInterrupted()) {
+					walker.thread.interrupt();
+				}
+			}
+			if (consumer != null) {
+				consumer.accept(null);
+			}
+		} finally {
+			main.unlock();
+		}
+		// recheck 确保任务能够顺利执行
+		if (state >= TERMINATED && consumer != null) {
+			if (watcher.tasks.remove(consumer)) {
+				consumer.accept(Collections.emptyList());
+			}
+		}
 	}
 
 	// region Walker
@@ -438,6 +465,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			this.thread = threadFactory.newThread(this);
 		}
 
+		/**
+		 * 增加缓存
+		 *
+		 * @param node 节点（缓存）
+		 */
 		private void addCache(Node node) {
 			if (cacheIndex >= caches.length) {
 				Node[] tmp = new Node[cacheIndex << 1];
@@ -447,6 +479,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			caches[cacheIndex++] = node;
 		}
 
+		/**
+		 * 移除缓存
+		 *
+		 * @param index 缓存下标
+		 */
 		private void removeCache(int index) {
 			for (int i = index, limit = cacheIndex - 1; i < limit; i++) {
 				caches[i] = caches[i + 1];
@@ -454,6 +491,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			caches[--cacheIndex] = null;
 		}
 
+		/**
+		 * 添加屏障
+		 *
+		 * @param node 节点（屏障）
+		 */
 		private void addBarrier(Node node) {
 			if (barrierIndex >= barriers.length) {
 				Node[] tmp = new Node[barrierIndex << 1];
@@ -463,6 +505,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			barriers[barrierIndex++] = node;
 		}
 
+		/**
+		 * 移除屏障
+		 *
+		 * @param index 屏障下标
+		 */
 		private void removeBarrier(int index) {
 			for (int i = index, limit = barrierIndex - 1; i < limit; i++) {
 				barriers[i] = barriers[i + 1];
@@ -470,10 +517,16 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			barriers[--barrierIndex] = null;
 		}
 
-		private boolean isReorder(Node node) {
-			// 判断是否可以越过所有屏障执行任务
+		private boolean skip(Node node) {
+			// 判断任务是否可以越过所有屏障执行
 			for (int i = 0; i < barrierIndex; i++) {
 				if (!node.isReorder(barriers[i])) {
+					return false;
+				}
+			}
+			// 判断任务是否可以越过所有缓存执行
+			for (int i = 0; i < cacheIndex; i++) {
+				if (!node.isReorder(caches[i])) {
 					return false;
 				}
 			}
@@ -505,23 +558,21 @@ public class ReorderedExplorer extends AbstractExplorerService {
 			Node node;
 			for (; ; ) {
 				// 状态检测，如果线程池已停止
-				if (state >= CLOSE && eventBus.eof(readerIndex) && barrierIndex <= 0 && cacheIndex <= 0) {
+				if (state >= SHUTDOWN || (state >= CLOSE && eventBus.eof(readerIndex) && barrierIndex <= 0 && cacheIndex <= 0)) {
 					return null;
 				}
 				for (int i = 0; i < barrierIndex; i++) {
 					node = barriers[i];
 					if (!node.isIntercepted()) {
-//						Debug.info("Work-" + track + " 移除屏障：" + node.getTask());
 						removeBarrier(i);
 					}
 				}
 				for (int i = 0; i < cacheIndex; i++) {
 					node = caches[i];
-					if (isReorder(node)) {
+					if (skip(node)) {
 						// 这个任务已经可以执行了，所以，直接移除
 						removeCache(i);
 						if (node.tryIntercept()) {
-//							Debug.info("Work-" + track + " 恢复屏障：" + node.getTask());
 							addBarrier(node);
 							node.weakUp();
 						} else {
@@ -543,18 +594,15 @@ public class ReorderedExplorer extends AbstractExplorerService {
 					if (node == null || !node.isTrack(track)) {
 						continue;
 					}
-					if (isReorder(node)) {
+					if (skip(node)) {
 						if (node.tryIntercept()) {
 							// only execute thread return event
-//							Debug.info("Work-" + track + " 增加屏障：" + node.getTask());
 							addBarrier(node);
 						} else {
-//							Debug.info("Work-" + track + " 执行任务：" + node.getTask());
 							eventBus.removeEvent(readerIndex);
 							return node;
 						}
 					} else {
-//						Debug.info("Work-" + track + " 缓存任务：" + node.getTask());
 						if (node.isAloneTrack()) {
 							eventBus.removeEvent(readerIndex);
 						}
@@ -577,6 +625,18 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		public void run() {
 			Node node;
 			while ((node = next()) != null) {
+				if (state >= SHUTDOWN) {
+					// 如果线程池已关闭，确保线程已经中断
+					if (!thread.isInterrupted()) {
+						thread.interrupt();
+					}
+				} else {
+					// 如果线程池未关闭，确保线程没有被中断。
+					// 并发下的一些问题，被中断了，恢复中断。
+					if (thread.isInterrupted() && Thread.interrupted() && state >= SHUTDOWN) {
+						thread.interrupt();
+					}
+				}
 				try {
 					node.getTask().run();
 				} finally {
@@ -588,7 +648,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		}
 
 		public void exit() {
-			LockSupport.unpark(dt);
+			LockSupport.unpark(watcher.thread);
 		}
 
 		@Override
@@ -1171,18 +1231,26 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	/**
 	 * 守望线程
 	 */
-	public class Watcher implements Runnable {
+	private class Watcher implements Runnable {
 
-		Thread thread;
+		final Thread thread;
 
 		volatile BlockingQueue<RunnableFuture<?>> tasks = new LinkedBlockingQueue<>();
+
+		volatile BlockingQueue<RunnableFuture<?>> consumers = new LinkedBlockingQueue<>();
+
+		public Watcher() {
+			thread = new Thread(this, "ExplorerWatcher-" + EXPLORER_WATCHER_INDEX.getAndIncrement());
+			thread.setDaemon(true);
+			thread.setPriority(Thread.MIN_PRIORITY);
+			thread.start();
+		}
 
 		@Override
 		public void run() {
 			while (state < TERMINATED) {
-				if (state >= CLOSE && isDone()) {
+				if ((state >= CLOSE && isDone()) || state >= SHUTDOWN) {
 					state = TERMINATED;
-					System.out.println("all done.");
 					for (; ; ) {
 						RunnableFuture<?> task = tasks.poll();
 						if (task == null) {
@@ -1191,8 +1259,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 						task.run();
 					}
 				} else {
-					// park 0.1 ms
-					LockSupport.parkNanos(10_000_000);
+					// park 1 ms
+					LockSupport.parkNanos(1_000_000);
 				}
 			}
 		}

@@ -1,8 +1,10 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.AbstractExplorerService;
+import com.keimons.nutshell.explorer.ConsumerFuture;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
 import java.util.concurrent.*;
 
 /**
@@ -75,11 +77,13 @@ public class DirectExplorer extends AbstractExplorerService {
 
 	@Override
 	public void close(RunnableFuture<?> onClose) {
-		onClose.run();
+		if (onClose != null) {
+			onClose.run();
+		}
 	}
 
 	@Override
-	public void shutdown() {
+	public void shutdown(ConsumerFuture<List<Runnable>> runnable) {
 		// do nothing
 	}
 

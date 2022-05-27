@@ -1,9 +1,12 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.BlockingCallerHandler;
+import com.keimons.nutshell.explorer.ConsumerFuture;
 import com.keimons.nutshell.explorer.ExplorerService;
 import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -219,6 +222,14 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 	@Override
 	public void close(RunnableFuture<?> onClose) {
 		super.shutdown();
+	}
+
+	@Override
+	public void shutdown(@Nullable ConsumerFuture<List<Runnable>> onClose) {
+		List<Runnable> tasks = shutdownNow();
+		if (onClose != null) {
+			onClose.accept(tasks);
+		}
 	}
 
 	@Override
