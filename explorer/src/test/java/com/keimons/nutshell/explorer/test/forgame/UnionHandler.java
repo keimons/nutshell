@@ -48,7 +48,7 @@ public class UnionHandler {
 		}
 	}
 
-	@MsgCode(opCode = 1004, desc = "剔出组织", strategies = {UnionIdByPlayerFencePolicy.class, TargetIdFencePolicy.class})
+	@MsgCode(opCode = 1004, desc = "处理加入组织", strategies = {UnionIdByPlayerFencePolicy.class, TargetIdFencePolicy.class})
 	public Object handleJoinUnion(Player player, JsonObject json) {
 		return null;
 	}
