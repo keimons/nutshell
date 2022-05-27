@@ -1,8 +1,10 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.AbstractExplorerService;
+import com.keimons.nutshell.explorer.ConsumerFuture;
 import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
 
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -91,7 +93,7 @@ public class QueueExplorer extends AbstractExplorerService {
 	}
 
 	@Override
-	public void shutdown() {
+	public void shutdown(ConsumerFuture<List<Runnable>> runnable) {
 		running = false;
 		for (AbstractExecutor executor : executors) {
 			executor.shutdown();
