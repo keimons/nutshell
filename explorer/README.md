@@ -10,7 +10,7 @@ Explorer是一个实现了锁消除的任务执行器。
 由此，衍生出“栅栏”的概念，在任务开始和结束时，分别放置一个栅栏，以确保任务执行期间，资源被该任务独享。
 我们将“栅栏”具象化为一个`Object`，`Object`能够代表这个资源，任务执行期间`Object`被锁定，每一个任务可以附带多个“栅栏”。
 
-# 关于使用
+# 快速开始
 
 Explorer的使用非常简单。
 
@@ -27,6 +27,7 @@ explorer.execute(task, "key");
 explorer.execute(task, "key1", "key2");
 explorer.execute(task, "key1", "key2", "key3");
 explorer.execute(task, "keys...");
+explorer.execute(task, "playerId", "teamId");
 ```
 
 最后，在该`keys`下的所有任务，永远是串行执行的。
@@ -79,28 +80,15 @@ QueueB  -> |           Key1 |      | Key1 Key3 Key5 | --> |  Thread B  |
 ```
 
 `Key2 + Key3`是一个共享任务，被两个队列共享，但期望整个任务最终只会被一个线程所执行。假定所有任务执行时长是一样的，任务执行：
-<ul>
-    <li>...</li>
-    <li>
-        第一时刻：{@code Thread A}处理{@code Key2}；{@code Thread B}处理{@code Key5}。
-    </li>
-    <li>
-        第二时刻：{@code Thread A}处理完{@code Key2}后越障，处理{@code Key4}；{@code Thread B}处理{@code Key3}。
-    </li>
-    <li>
-        第三时刻：{@code Thread A}遇到{@code Key2}存储任务并跳过，处理{@code Key0}；{@code Thread B}处理{@code Key1}。
-    </li>
-    <li>
-        第四时刻：{@code Thread A}进入休眠/自旋；{@code Thread B}处理共享任务{@code Key2 + Key3}。
-    </li>
-    <li>
-        第五时刻：{@code Thread A}跳过共享任务{@code Key2 + Key3}，处理存储的{@code Key2}；{@code Thread B}处理{@code Key1}。
-    </li>
-    <li>
-        第六时刻：{@code Thread A}空闲；{@code Thread B}空闲。
-    </li>
-    <li>...</li>
-</ul>
+
+线程状态 |               Thread A               |       ThreadB       |
+---------|:------------------------------------:|:-------------------:|
+第一时刻 |               处理`Key2`               |      处理`Key5`       |
+第二时刻 | 遇到共享任务`Key2 + Key3`，生成屏障并跳过，处理`Key4` |      处理`Key3`       |
+第三时刻 |      遇到`Key2`，拦截并缓存任务，处理`Key0`       |      处理`Key1`       |
+第四时刻 |              进入休眠/自旋/空闲              | 处理共享任务`Key2 + Key3` |
+第五时刻 |  释放共享任务屏障`Key2 + Key3`，处理缓存的`Key2`   |      处理`Key1`       |
+第六时刻 |                  空闲                  |         空闲          |
 
 拦截器的设计，提升了吞吐量，防止单个任务卡主整个线程。
 
