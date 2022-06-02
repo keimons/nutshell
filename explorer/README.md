@@ -1,8 +1,16 @@
 # What's Explorer?
 
-Explorer是一个实现了锁消除的任务执行器。
+Explorer是一个无锁化设计的任务执行器。
 
 # 核心思想
+
+## 执行绑定
+
+将资源和执行器绑定，例如，Netty中将Channel和EventLoop绑定，来自此Channel的消息，将由同一个EventLoop处理。
+
+Explorer采用hash的静态绑定，对指定资源计算hash，计算出真正的执行器。
+
+## 执行栅栏
 
 “锁”的存在保证共享资源在同一时间只能被一个线程访问。
 
