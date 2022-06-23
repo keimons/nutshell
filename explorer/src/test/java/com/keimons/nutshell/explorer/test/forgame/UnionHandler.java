@@ -10,17 +10,17 @@ import java.util.Map;
  * @version 1.0
  * @since 11
  **/
-@MsgGroup(opCode = 1000, desc = "组织相关协议", playerFence = true, strategies = UnionHandler.UnionIdFencePolicy.class)
+@MsgGroup(opCode = 1000, desc = "组织相关协议", strategies = {CommonStrategy.PlayerIdPolicy.class})
 public class UnionHandler {
 
 	private static final Map<String, Union> unions = new HashMap<>();
 
-	@MsgCode(opCode = 1001, desc = "查找组织", strategies = {})
+	@MsgCode(opCode = 1001, desc = "查找组织")
 	public Object findUnion(Player player, JsonObject json) {
 		return unions;
 	}
 
-	@MsgCode(opCode = 1002, desc = "加入组织")
+	@MsgCode(opCode = 1002, desc = "加入组织", attach = UnionIdFencePolicy.class)
 	public Object joinUnion(Player player, JsonObject json) {
 		String unionId = json.getString("unionId");
 		Union union = unions.get(unionId);
@@ -34,7 +34,7 @@ public class UnionHandler {
 		}
 	}
 
-	@MsgCode(opCode = 1003, desc = "剔出组织", strategies = {UnionIdByPlayerFencePolicy.class, TargetIdFencePolicy.class})
+	@MsgCode(opCode = 1003, desc = "踢出组织", attach = {UnionIdByPlayerFencePolicy.class, TargetIdFencePolicy.class})
 	public Object exitUnion(Player player, JsonObject json) {
 		String unionId = player.getUnionId();
 		String targetId = json.getString("targetId");
@@ -48,7 +48,7 @@ public class UnionHandler {
 		}
 	}
 
-	@MsgCode(opCode = 1004, desc = "处理加入组织", strategies = {UnionIdByPlayerFencePolicy.class, TargetIdFencePolicy.class})
+	@MsgCode(opCode = 1004, desc = "处理加入组织", cover = {UnionIdByPlayerFencePolicy.class, TargetIdFencePolicy.class})
 	public Object handleJoinUnion(Player player, JsonObject json) {
 		return null;
 	}
@@ -56,15 +56,15 @@ public class UnionHandler {
 	public static class UnionIdFencePolicy implements FenceStrategy {
 
 		@Override
-		public Object getFence(Player player, JsonObject json) {
-			return json.getString("unionId");
+		public Object getFence(Player player, JsonObject request) {
+			return request.getString("unionId");
 		}
 	}
 
 	public static class UnionIdByPlayerFencePolicy implements FenceStrategy {
 
 		@Override
-		public Object getFence(Player player, JsonObject json) {
+		public Object getFence(Player player, JsonObject request) {
 			// check
 			return player.getUnionId();
 		}
@@ -73,8 +73,8 @@ public class UnionHandler {
 	public static class TargetIdFencePolicy implements FenceStrategy {
 
 		@Override
-		public Object getFence(Player player, JsonObject json) {
-			return json.getString("targetId");
+		public Object getFence(Player player, JsonObject request) {
+			return request.getString("targetId");
 		}
 	}
 }

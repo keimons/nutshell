@@ -1,21 +1,21 @@
 package com.keimons.nutshell.explorer.test.explorer;
 
 import com.keimons.nutshell.explorer.ConsumerTask;
-import com.keimons.nutshell.explorer.support.ReorderedExplorer;
+import com.keimons.nutshell.explorer.support.Threadripper;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link ReorderedExplorer}关闭测试
+ * {@link Threadripper}关闭测试
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @since 11
  **/
-public class ReorderedExplorerShutdownTest {
+public class ThreadripperShutdownTest {
 
 	@Test
 	public void test() {
-		ReorderedExplorer explorer = new ReorderedExplorer(4);
+		Threadripper explorer = new Threadripper(4);
 
 		explorer.shutdown(new ConsumerTask<>((tasks) -> {
 			for (Runnable task : tasks) {

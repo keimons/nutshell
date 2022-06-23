@@ -3,7 +3,7 @@ package com.keimons.nutshell.explorer.support;
 import com.keimons.nutshell.explorer.BlockingCallerHandler;
 import com.keimons.nutshell.explorer.ConsumerFuture;
 import com.keimons.nutshell.explorer.ExplorerService;
-import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
+import com.keimons.nutshell.explorer.RejectedExplorerHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -63,7 +63,7 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 	 *     <li>执行器已关闭</li>
 	 * </ul>
 	 */
-	private final RejectedTrackExecutionHandler rejectedHandler;
+	private final RejectedExplorerHandler rejectedHandler;
 
 	/**
 	 * （阻塞调用者策略）是否阻塞调用者
@@ -82,11 +82,11 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 	 * @param nThreads        启动线程
 	 * @param rejectedHandler 拒绝执行策略
 	 */
-	public SharedQueueExplorer(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler) {
+	public SharedQueueExplorer(String name, int nThreads, RejectedExplorerHandler rejectedHandler) {
 		this(name, nThreads, new LinkedBlockingDeque<>(8), rejectedHandler);
 	}
 
-	private SharedQueueExplorer(String name, int nThreads, BlockingDeque<Runnable> sharedQueue, RejectedTrackExecutionHandler rejectedHandler) {
+	private SharedQueueExplorer(String name, int nThreads, BlockingDeque<Runnable> sharedQueue, RejectedExplorerHandler rejectedHandler) {
 		super(nThreads, nThreads, 0, TimeUnit.MILLISECONDS, sharedQueue, new InternalRejectedExecutionHandler());
 		this.name = name;
 		this.sharedQueue = sharedQueue;
@@ -238,7 +238,7 @@ public class SharedQueueExplorer extends ThreadPoolExecutor implements ExplorerS
 	}
 
 	/**
-	 * 关联{@link RejectedExecutionHandler}和{@link RejectedTrackExecutionHandler}
+	 * 关联{@link RejectedExecutionHandler}和{@link RejectedExplorerHandler}
 	 */
 	private static final class InternalRejectedExecutionHandler implements RejectedExecutionHandler {
 

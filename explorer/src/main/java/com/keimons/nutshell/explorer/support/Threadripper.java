@@ -3,6 +3,7 @@ package com.keimons.nutshell.explorer.support;
 import com.keimons.deepjson.util.UnsafeUtil;
 import com.keimons.nutshell.explorer.*;
 import com.keimons.nutshell.explorer.internal.DefaultEventBus;
+import com.keimons.nutshell.explorer.internal.EventBus;
 import com.keimons.nutshell.explorer.utils.XUtils;
 import jdk.internal.vm.annotation.Contended;
 import org.jetbrains.annotations.Nullable;
@@ -19,63 +20,59 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * 环轨执行器
+ * 线程撕裂者
  * <p>
- * 轨道缓冲区意在既不添加派发线程，又能处理交叉投递问题。{@code IO线程 -> 派发线程 -> work线程}的模式能够避免任务的交叉投递，但是增加了一次额外的派发。
- * 取消{@code 派发线程}，则有可能产生交叉投递问题。按照顺序投递（KeyC + KeyA也按照先投递KeyA，再投递KeyC），也可能产生的交叉投递问题如下：
- * <pre>
- * IO-Thread-1, commit task1: KeyA + KeyB
- * IO-Thread-2, commit task2: KeyB + KeyC
- * IO-Thread-3, commit task3: KeyA + KeyC
- * </pre>
- * KeyA，KeyB，KeyC分别投递到队列：QueueA，QueueB，QueueC。在某一个时刻，任务投递情况如下：
+ * 线程撕裂者采用多线程的线程模型，提供趋近于单线程的最终表现。通过对任务的拦截与重排序提高CPU的利用率，进而提升系统的吞吐量。
+ * 它也许运行时的状态是不准确的，但最终结果总是准确的，是“强最终一致性（Strong Eventual Consistency（SEC））”的一种实现。
+ * <p>
+ * 当线程被拦截器拦截后，如果线程处于休眠/自旋等待时，影响吞吐量。大部分时候，期望针对于单Key是串行执行，而不相关的Key可以重排序执行，也就是越障执行。
+ * 它其实很像单行公路上的交警，仅仅拦截某个型号的汽车，让其停靠在路边，而其它型号的汽车则可以提前通过。当收到放行指令后，所有被拦截的汽车优先于正在等待通行的汽车，依次通行。
+ * 设计目的：
  * <ul>
- *     <li>IO-Thread-3，投递task3到QueueA</li>
- *     <li>IO-Thread-1，投递task1到QueueA</li>
- *     <li>IO-Thread-1，投递task1到QueueB</li>
- *     <li>IO-Thread-2，投递task2到QueueB</li>
- *     <li>IO-Thread-2，投递task2到QueueC</li>
- *     <li>IO-Thread-3，投递task3到QueueC</li>
+ *     <li>保证对外表现的一致。</li>
+ *     <li>它不是神丹妙药，但在力所能及的范围内避免死锁。</li>
+ *     <li>降低多线程编码门槛和难度。</li>
+ *     <li>它依然是适用于redis的，但是对于具有唯一ID的，例如：地块ID、公会ID等，有了更好的表现。</li>
  * </ul>
- * 此时，各个队列中的任务：
+ * 通过对于仅拦截指定的Key，而不是全拦截，从而提升吞吐量。线程始终处于运行状态，如图：
  * <pre>
- * QueueA --> task1, task3 --> Thread-1
- * QueueB --> task2, task1 --> Thread-2
- * QueueC --> task3, task2 --> Thread-3
+ *            +----------------------------------------+     +------------+
+ * QueueA  -> | Key0 Key2 Key4 |      | Key2           | --> |  Thread A  |
+ *            +----------------+ Key2 +----------------+     +------------+
+ *                             |  +   |
+ *            +----------------+ Key3 +----------------+     +------------+
+ * QueueB  -> |           Key1 |      | Key1 Key3 Key5 | --> |  Thread B  |
+ *            +----------------------------------------+     +------------+
  * </pre>
- * 此时任务出现交叉，产生死锁。在不添加派发线程的前提下，升级环形队列，增加一个维度，每个线程仅仅读取指定槽位的Key，如果当前位置为空，则表示没有任务，跳过执行。示意如下：
- * <pre>
- *           writeIndex
- *           |
- *           +---------------------------+    +---------------------+
- * QueueA -> | Key1 | Key1 |      | Key1 | -> | Thread-1, readIndex |
- *           |------+------+------+------|    |---------------------|
- * QueueB -> |      | Key2 | Key2 |      | -> | Thread-2, readIndex |
- *           |------+------+------+------|    |---------------------|
- * QueueC -> | Key3 |      | Key3 |      | -> | Thread-3, readIndex |
- *           +---------------------------+    +---------------------+
- *              |      |      |      |
- *            task3  task1  task2  task0
- * </pre>
- * 由IO线程生成任务信息并发布在环形Buffer总线上。环形buffer中发布的，不再是单个任务，而是包含Key组的任务，Key组中可能包含一个或多个Key。
- * 仅仅维护一个全局的{@code writeIndex}，每个线程维护自己的{@code readIndex}，只要{@code readIndex < writeIndex}
- * 则可以继续向下读取，如果当前位置为空，则表明此任务不是这个线程关注的任务，跳过执行，联合{@link TrackBarrier}使用。
- * <p>
- * 轨道缓冲区同时也是总线队列，所有任务都是发布在总线上。
- * <p>
- * 其它：
+ * {@code Key2 + Key3}是一个共享任务，被两个队列共享，但期望整个任务最终只会被一个线程所执行。假定所有任务执行时长是一样的，任务执行：
  * <ul>
- *     <li>任务发布，环形Buffer总线上发布由IO线程生成的任务。</li>
- *     <li>占用更多空间（n * ThreadCount），队列利用率下降。</li>
- *     <li>任务命中率降至{@code 1/ThreadCount}。</li>
- *     <li>充分利用cpu缓存行能力下降。</li>
+ *     <li>...</li>
+ *     <li>
+ *         第一时刻：{@code Thread A}处理{@code Key2}；{@code Thread B}处理{@code Key5}。
+ *     </li>
+ *     <li>
+ *         第二时刻：{@code Thread A}处理完{@code Key2}后越障，处理{@code Key4}；{@code Thread B}处理{@code Key3}。
+ *     </li>
+ *     <li>
+ *         第三时刻：{@code Thread A}遇到{@code Key2}存储任务并跳过，处理{@code Key0}；{@code Thread B}处理{@code Key1}。
+ *     </li>
+ *     <li>
+ *         第四时刻：{@code Thread A}进入休眠/自旋；{@code Thread B}处理共享任务{@code Key2 + Key3}。
+ *     </li>
+ *     <li>
+ *         第五时刻：{@code Thread A}跳过共享任务{@code Key2 + Key3}，处理存储的{@code Key2}；{@code Thread B}处理{@code Key1}。
+ *     </li>
+ *     <li>
+ *         第六时刻：{@code Thread A}空闲；{@code Thread B}空闲。
+ *     </li>
+ *     <li>...</li>
  * </ul>
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @since 11
  **/
-public class ReorderedExplorer extends AbstractExplorerService {
+public class Threadripper extends AbstractExplorerService {
 
 	/**
 	 * 默认线程队列长度
@@ -91,6 +88,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 */
 	public static final String DEFAULT_NAME = "ReorderedExplorer";
 
+	/**
+	 * time
+	 */
+	private final int TIME = 2000;
+
 	private final Lock main = new ReentrantLock();
 
 	/**
@@ -98,7 +100,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 * <p>
 	 * 所有任务都发布在事件总线上，如果事件总线不能发布任务，任务发布失败，则队列已满。
 	 */
-	private final DefaultEventBus<Node> eventBus;
+	private final EventBus<Node> eventBus;
 
 	/**
 	 * 任务执行器
@@ -110,11 +112,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 */
 	private final Watcher watcher;
 
-	public ReorderedExplorer(int nThreads) {
+	public Threadripper(int nThreads) {
 		this(DEFAULT_NAME, nThreads, nThreads * DEFAULT_THREAD_CAPACITY, DefaultRejectedHandler, Explorers.defaultThreadFactory());
 	}
 
-	public ReorderedExplorer(String name, int nThreads, int capacity, RejectedTrackExecutionHandler rejectedHandler, ThreadFactory threadFactory) {
+	public Threadripper(String name, int nThreads, int capacity, RejectedExplorerHandler rejectedHandler, ThreadFactory threadFactory) {
 		super(name, nThreads, rejectedHandler, threadFactory);
 		eventBus = new DefaultEventBus<>(capacity);
 		walkers = new Walker[nThreads];
@@ -451,7 +453,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		/**
 		 * 已完成的任务数量
 		 */
+		@Contended("t")
 		private long completedTasks;
+
+		@Contended("t")
+		private volatile long startTime = -1;
 
 		/**
 		 * 执行器构造方法
@@ -638,9 +644,11 @@ public class ReorderedExplorer extends AbstractExplorerService {
 					}
 				}
 				try {
+					startTime = System.currentTimeMillis();
 					node.getTask().run();
 				} finally {
 					completedTasks++;
+					startTime = -1;
 					node.release();
 				}
 			}
@@ -686,6 +694,10 @@ public class ReorderedExplorer extends AbstractExplorerService {
 	 * <p>
 	 * <p>
 	 * 注意：如果能顺利解决拦截器释放的问题，可以考虑使用对象池以提升性能。
+	 *
+	 *
+	 * 轨道屏障
+	 * <p>
 	 */
 	public interface Node extends Interceptor {
 
@@ -932,7 +944,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 		@Override
 		public void weakUp() {
-			ReorderedExplorer.this.weakUp(track);
+			Threadripper.this.weakUp(track);
 		}
 
 		@Override
@@ -1013,8 +1025,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 		@Override
 		public void weakUp() {
-			ReorderedExplorer.this.weakUp(track1);
-			ReorderedExplorer.this.weakUp(track2);
+			Threadripper.this.weakUp(track1);
+			Threadripper.this.weakUp(track2);
 		}
 
 		@Override
@@ -1091,9 +1103,9 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 		@Override
 		public void weakUp() {
-			ReorderedExplorer.this.weakUp(track0);
-			ReorderedExplorer.this.weakUp(track1);
-			ReorderedExplorer.this.weakUp(track2);
+			Threadripper.this.weakUp(track0);
+			Threadripper.this.weakUp(track1);
+			Threadripper.this.weakUp(track2);
 		}
 
 		@Override
@@ -1164,7 +1176,7 @@ public class ReorderedExplorer extends AbstractExplorerService {
 		public void weakUp() {
 			for (int i = 0; i < nThreads; i++) {
 				if ((bits & (1L << i)) != 0) {
-					ReorderedExplorer.this.weakUp(i);
+					Threadripper.this.weakUp(i);
 				}
 			}
 		}
@@ -1230,6 +1242,8 @@ public class ReorderedExplorer extends AbstractExplorerService {
 
 	/**
 	 * 守望线程
+	 * <p>
+	 * 监控执行器的关闭，处理
 	 */
 	private class Watcher implements Runnable {
 
@@ -1260,6 +1274,17 @@ public class ReorderedExplorer extends AbstractExplorerService {
 					}
 				} else {
 					// park 1 ms
+					long now = System.currentTimeMillis();
+					for (int i = 0; i < walkers.length; i++) {
+						long startTime = walkers[i].startTime;
+						if (startTime == -1) {
+							continue;
+						}
+						long workTime = now - startTime;
+						if (workTime >= TIME) {
+							System.out.println(workTime);
+						}
+					}
 					LockSupport.parkNanos(1_000_000);
 				}
 			}

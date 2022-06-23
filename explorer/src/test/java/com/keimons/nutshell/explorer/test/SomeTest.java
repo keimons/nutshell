@@ -8,18 +8,20 @@ public class SomeTest {
 
 	@Test
 	public void test() {
-		Thread thread = Thread.currentThread();
-		long startTime = System.currentTimeMillis();
-		for (int i = 0; i < 10000000; i++) {
-			LockSupport.unpark(thread);
-		}
-		System.out.println("time0: " + (System.currentTimeMillis() - startTime));
-
-		long t = 0;
-		startTime = System.currentTimeMillis();
-		for (int i = 0; i < 10000000; i++) {
-			t += System.currentTimeMillis();
-		}
-		System.out.println(t + "time0: " + (System.currentTimeMillis() - startTime));
+		float sum = 22000+17248.40f+
+				22000+6831.69f+
+				22000+6831.69f+
+				22000+598.44f+
+				36000+
+				22000+8869.87f+
+				22000+8869.87f+
+				22000+8869.87f+
+				22000+7732.50f+
+				22000+7732.50f+
+				22000+7732.50f+
+				22000+6332.69f+
+				22000+6332.69f;
+		System.out.println(sum);
 	}
 }
+

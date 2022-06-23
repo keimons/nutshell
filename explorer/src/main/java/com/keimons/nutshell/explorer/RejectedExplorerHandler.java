@@ -13,7 +13,7 @@ import java.util.concurrent.RejectedExecutionException;
  * @version 1.0
  * @since 11
  */
-public interface RejectedTrackExecutionHandler {
+public interface RejectedExplorerHandler {
 
 	/**
 	 * 拒绝执行

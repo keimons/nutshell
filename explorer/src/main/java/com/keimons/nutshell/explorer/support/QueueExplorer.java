@@ -2,7 +2,7 @@ package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.AbstractExplorerService;
 import com.keimons.nutshell.explorer.ConsumerFuture;
-import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
+import com.keimons.nutshell.explorer.RejectedExplorerHandler;
 
 import java.util.List;
 import java.util.concurrent.*;
@@ -23,7 +23,7 @@ public class QueueExplorer extends AbstractExplorerService {
 	 */
 	private final AbstractExecutor[] executors;
 
-	public QueueExplorer(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler) {
+	public QueueExplorer(String name, int nThreads, RejectedExplorerHandler rejectedHandler) {
 		super(name, nThreads, rejectedHandler, Executors.defaultThreadFactory());
 		executors = new AbstractExecutor[nThreads];
 		for (int i = 0; i < nThreads; i++) {

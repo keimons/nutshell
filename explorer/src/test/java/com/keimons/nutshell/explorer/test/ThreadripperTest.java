@@ -1,7 +1,7 @@
 package com.keimons.nutshell.explorer.test;
 
 import com.keimons.nutshell.explorer.Debug;
-import com.keimons.nutshell.explorer.support.ReorderedExplorer;
+import com.keimons.nutshell.explorer.support.Threadripper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,13 +10,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 
 /**
- * {@link ReorderedExplorer}重排序轨道执行器测试
+ * {@link Threadripper}重排序轨道执行器测试
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
  * @since 11
  */
-public class ReorderedExplorerTest {
+public class ThreadripperTest {
 
 	@BeforeAll
 	public static void beforeTest() {
@@ -25,7 +25,7 @@ public class ReorderedExplorerTest {
 
 	@Test
 	public void test() throws InterruptedException, ExecutionException {
-		ReorderedExplorer explorer = new ReorderedExplorer(4);
+		Threadripper explorer = new Threadripper(4);
 		explorer.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -99,7 +99,7 @@ public class ReorderedExplorerTest {
 	@Test
 	public void testOrdered() throws InterruptedException, ExecutionException {
 		ThreadLocal<Integer> LOCAL = new ThreadLocal<>();
-		ReorderedExplorer explorer = new ReorderedExplorer(4);
+		Threadripper explorer = new Threadripper(4);
 		explorer.execute(() -> LOCAL.set(-4), 0);
 		explorer.execute(() -> LOCAL.set(-3), 1);
 		explorer.execute(() -> LOCAL.set(-2), 2);

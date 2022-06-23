@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer.test;
 
-import com.keimons.nutshell.explorer.support.ReorderedExplorer;
+import com.keimons.nutshell.explorer.support.Threadripper;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.ExecutionException;
@@ -19,7 +19,7 @@ public class WeakUpTest {
 
 	@Test
 	public void test() throws ExecutionException, InterruptedException {
-		ReorderedExplorer explorer = new ReorderedExplorer(2);
+		Threadripper explorer = new Threadripper(2);
 		for (int i = 0; i < 2_0000_0000; i++) {
 			if ((i & 0B11) == 0B11) {
 				Future<?> future = explorer.submit(TASK, 0);

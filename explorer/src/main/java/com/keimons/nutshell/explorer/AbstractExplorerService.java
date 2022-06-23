@@ -18,7 +18,7 @@ public abstract class AbstractExplorerService implements ExplorerService {
 	 * <p>
 	 * 当消息队列已满时，如果继续向队列中写入任务，则调用执行此异常。
 	 */
-	public static final RejectedTrackExecutionHandler DefaultRejectedHandler = new AbortPolicy();
+	public static final RejectedExplorerHandler DefaultRejectedHandler = new AbortPolicy();
 
 	/**
 	 * 运行中
@@ -61,7 +61,7 @@ public abstract class AbstractExplorerService implements ExplorerService {
 	/**
 	 * 被拒绝执行的任务处理句柄
 	 */
-	protected final RejectedTrackExecutionHandler rejectedHandler;
+	protected final RejectedExplorerHandler rejectedHandler;
 
 	/**
 	 * 是否阻塞调用者线程
@@ -127,7 +127,7 @@ public abstract class AbstractExplorerService implements ExplorerService {
 	 * @param rejectedHandler 被拒绝执行任务的处理句柄
 	 * @param threadFactory   线程工厂
 	 */
-	public AbstractExplorerService(String name, int nThreads, RejectedTrackExecutionHandler rejectedHandler, ThreadFactory threadFactory) {
+	public AbstractExplorerService(String name, int nThreads, RejectedExplorerHandler rejectedHandler, ThreadFactory threadFactory) {
 		this.name = name;
 		this.nThreads = nThreads;
 		this.rejectedHandler = rejectedHandler;

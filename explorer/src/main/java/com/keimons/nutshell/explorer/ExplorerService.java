@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer;
 
-import com.keimons.nutshell.explorer.support.ReorderedExplorer;
+import com.keimons.nutshell.explorer.support.Threadripper;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -162,7 +162,7 @@ public interface ExplorerService {
 	 *     <li>处理正在排队的任务；</li>
 	 *     <li>退出工作线程、（如果有）守护线程。</li>
 	 * </ol>
-	 * 已经添加到队列中的任务都会正常处理完成，这是友好的，尤其是对于{@link ReorderedExplorer}，
+	 * 已经添加到队列中的任务都会正常处理完成，这是友好的，尤其是对于{@link Threadripper}，
 	 * 因为任务的重排序，使得任务的执行已经是乱序了，只有等待所有任务执行完成后关闭执行器，
 	 * 才能保证任务的执行顺序是符合预期的。如果执行器已经关闭，重复调用不会有额外的效果。
 	 * <p>

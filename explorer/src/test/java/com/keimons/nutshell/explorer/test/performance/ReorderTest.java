@@ -1,7 +1,7 @@
 package com.keimons.nutshell.explorer.test.performance;
 
 import com.keimons.nutshell.explorer.Debug;
-import com.keimons.nutshell.explorer.support.ReorderedExplorer;
+import com.keimons.nutshell.explorer.support.Threadripper;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * {@link ReorderedExplorer}重排序性能测试
+ * {@link Threadripper}重排序性能测试
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
@@ -40,10 +40,10 @@ public class ReorderTest {
 	@DisplayName("重排序任务性能测试")
 	@Test
 	public void test() throws InterruptedException, ExecutionException {
-		ReorderedExplorer explorer = new ReorderedExplorer(ReorderedExplorer.DEFAULT_NAME,
+		Threadripper explorer = new Threadripper(Threadripper.DEFAULT_NAME,
 				THREAD,
-				THREAD * ReorderedExplorer.DEFAULT_THREAD_CAPACITY,
-				ReorderedExplorer.DefaultRejectedHandler,
+				THREAD * Threadripper.DEFAULT_THREAD_CAPACITY,
+				Threadripper.DefaultRejectedHandler,
 				new IndexThreadFactory()
 		);
 		AtomicInteger busy = new AtomicInteger();
@@ -86,7 +86,7 @@ public class ReorderTest {
 	@Test
 	public void testOrder() throws InterruptedException, ExecutionException {
 		AtomicInteger LOCAL = new AtomicInteger(-1);
-		ReorderedExplorer explorer = new ReorderedExplorer(2);
+		Threadripper explorer = new Threadripper(2);
 		AtomicLong time = new AtomicLong();
 		explorer.execute(() -> time.set(System.currentTimeMillis()), 0);
 		for (int i = 0; i < COUNT; i++) {
