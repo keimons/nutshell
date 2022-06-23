@@ -9,7 +9,7 @@ package com.keimons.nutshell.explorer;
  * @version 1.0
  * @since 11
  */
-public interface BlockingCallerHandler extends RejectedTrackExecutionHandler {
+public interface BlockingCallerHandler extends RejectedExplorerHandler {
 
 	/**
 	 * 阻塞失败

@@ -1,6 +1,10 @@
 # What's Explorer?
 
-Explorer是一个无锁化设计的任务执行器。
+Explorer是一个任务执行器。它提供了：
+
+1. 强最终一致性Strong Eventual Consistency（SEC）；
+2. 任务重排序执行；
+3. 无锁化设计。
 
 # 核心思想
 

@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer.test.performance;
 
-import com.keimons.nutshell.explorer.support.ReorderedExplorer;
+import com.keimons.nutshell.explorer.support.Threadripper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,7 +66,7 @@ public class SingleProducerTest {
 	@DisplayName("Explorer测试")
 	@Test
 	public void testExplorer() throws InterruptedException, ExecutionException {
-		ReorderedExplorer explorer = new ReorderedExplorer(1);
+		Threadripper explorer = new Threadripper(1);
 		for (int i = 0; i < TIMES; i++) {
 			explorer.execute(tasks.get(i), i & 0x1);
 		}

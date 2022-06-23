@@ -1,7 +1,7 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.ExplorerService;
-import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
+import com.keimons.nutshell.explorer.RejectedExplorerHandler;
 
 import java.util.concurrent.RejectedExecutionException;
 
@@ -14,7 +14,7 @@ import java.util.concurrent.RejectedExecutionException;
  * @version 1.0
  * @since 11
  */
-public class AbortPolicy implements RejectedTrackExecutionHandler {
+public class AbortPolicy implements RejectedExplorerHandler {
 
 	@Override
 	public void rejectedExecution(ExplorerService executor, Runnable task, Object... fences) {

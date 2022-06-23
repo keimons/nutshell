@@ -1,7 +1,7 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.explorer.ExplorerService;
-import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
+import com.keimons.nutshell.explorer.RejectedExplorerHandler;
 
 /**
  * 本地执行
@@ -12,7 +12,7 @@ import com.keimons.nutshell.explorer.RejectedTrackExecutionHandler;
  * @version 1.0
  * @since 11
  */
-public class LocalPolicy implements RejectedTrackExecutionHandler {
+public class LocalPolicy implements RejectedExplorerHandler {
 
 	@Override
 	public void rejectedExecution(ExplorerService executor, Runnable task, Object... fences) {

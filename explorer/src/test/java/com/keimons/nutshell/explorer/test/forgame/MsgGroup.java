@@ -5,7 +5,7 @@ import java.lang.annotation.*;
 /**
  * 定义消息组
  * <p>
- * 消息组的默认配置。方法级注解覆盖类注解
+ * 消息组的配置。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
@@ -16,11 +16,24 @@ import java.lang.annotation.*;
 @Target(ElementType.TYPE)
 public @interface MsgGroup {
 
+	/**
+	 * 消息号
+	 *
+	 * @return 消息号
+	 */
 	int opCode();
 
+	/**
+	 * 消息描述
+	 *
+	 * @return 消息描述
+	 */
 	String desc();
 
-	boolean playerFence() default true;
-
+	/**
+	 * 缺省策略屏障
+	 *
+	 * @return 消息组的公共屏障策略
+	 */
 	Class<? extends FenceStrategy>[] strategies() default {};
 }
