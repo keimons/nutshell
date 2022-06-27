@@ -2,7 +2,6 @@ package com.keimons.nutshell.core.command;
 
 import com.keimons.nutshell.core.Autolink;
 import com.keimons.nutshell.core.internal.utils.MethodUtils;
-import com.keimons.nutshell.core.nutshell.NutshellFactory;
 import com.keimons.nutshell.core.session.Session;
 import com.keimons.nutshell.core.session.SessionContext;
 

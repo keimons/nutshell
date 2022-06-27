@@ -13,7 +13,7 @@ public interface FenceStrategy {
 
 	/**
 	 * 返回屏障
-	 *
+	 * <p>
 	 * 根据玩家或者解析{@code request}
 	 *
 	 * @param player  玩家
