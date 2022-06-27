@@ -694,8 +694,8 @@ public class Threadripper extends AbstractExplorerService {
 	 * <p>
 	 * <p>
 	 * 注意：如果能顺利解决拦截器释放的问题，可以考虑使用对象池以提升性能。
-	 *
-	 *
+	 * <p>
+	 * <p>
 	 * 轨道屏障
 	 * <p>
 	 */
