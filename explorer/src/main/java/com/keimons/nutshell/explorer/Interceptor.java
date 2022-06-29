@@ -91,5 +91,5 @@ public interface Interceptor {
 	/**
 	 *
 	 */
-	void release();
+	void release(int track);
 }

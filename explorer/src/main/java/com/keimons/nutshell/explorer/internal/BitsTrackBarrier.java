@@ -139,6 +139,11 @@ public class BitsTrackBarrier implements TrackBarrier {
 	}
 
 	@Override
+	public void release(int track) {
+
+	}
+
+	@Override
 	public boolean isTrack(long bits) {
 		return (this.bits & bits) != 0;
 	}
