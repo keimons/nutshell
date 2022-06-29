@@ -67,7 +67,8 @@ public class YieldInterceptor implements Interceptor {
 		return false;
 	}
 
-	public void release() {
+	@Override
+	public void release(int track) {
 		release = true;
 	}
 }

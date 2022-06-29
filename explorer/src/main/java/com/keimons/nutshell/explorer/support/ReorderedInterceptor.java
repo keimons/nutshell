@@ -41,7 +41,7 @@ public class ReorderedInterceptor implements Interceptor {
 	}
 
 	@Override
-	public void release() {
+	public void release(int track) {
 		intercepted = false;
 	}
 }

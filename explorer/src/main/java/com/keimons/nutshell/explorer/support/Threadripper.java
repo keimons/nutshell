@@ -531,11 +531,11 @@ public class Threadripper extends AbstractExplorerService {
 				}
 			}
 			// 判断任务是否可以越过所有缓存执行
-			for (int i = 0; i < cacheIndex; i++) {
-				if (!node.isReorder(caches[i])) {
-					return false;
-				}
-			}
+//			for (int i = 0; i < cacheIndex; i++) {
+//				if (!node.isReorder(caches[i])) {
+//					return false;
+//				}
+//			}
 			return true;
 		}
 
@@ -567,6 +567,8 @@ public class Threadripper extends AbstractExplorerService {
 				if (state >= SHUTDOWN || (state >= CLOSE && eventBus.eof(readerIndex) && barrierIndex <= 0 && cacheIndex <= 0)) {
 					return null;
 				}
+				OptimisticLock lock = this.lock;
+				int stamp = lock.stamp;
 				for (int i = 0; i < barrierIndex; i++) {
 					node = barriers[i];
 					if (!node.isIntercepted()) {
@@ -590,8 +592,6 @@ public class Threadripper extends AbstractExplorerService {
 						}
 					}
 				}
-				OptimisticLock lock = this.lock;
-				int stamp = lock.stamp;
 				final long readerIndex = this.readerIndex;
 				if (readerIndex < eventBus.writerIndex()) {
 					node = eventBus.getEvent(readerIndex);
@@ -649,7 +649,7 @@ public class Threadripper extends AbstractExplorerService {
 				} finally {
 					completedTasks++;
 					startTime = -1;
-					node.release();
+					node.release(track);
 				}
 			}
 			exit();
@@ -822,7 +822,7 @@ public class Threadripper extends AbstractExplorerService {
 		 * 如果使用对象池，需要移除其它线程持有的这个节点。
 		 */
 		@Override
-		void release();
+		void release(int track);
 	}
 
 	/**
@@ -897,11 +897,6 @@ public class Threadripper extends AbstractExplorerService {
 		@Override
 		public boolean isIntercepted() {
 			return intercepted;
-		}
-
-		@Override
-		public void release() {
-			this.intercepted = false;
 		}
 	}
 
@@ -996,7 +991,7 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public void release() {
+		public void release(int track) {
 			// do nothing
 		}
 	}
@@ -1006,37 +1001,37 @@ public class Threadripper extends AbstractExplorerService {
 	 */
 	private class Node2 extends AbstractNode {
 
-		private final int track1;
+		private final int track0;
 
 		private final Object fence0;
 
-		private final int track2;
+		private final int track1;
 
 		private final Object fence1;
 
 		public Node2(Runnable task, Object fence0, Object fence1) {
 			super(task, 2);
-			this.track1 = fence0.hashCode() % nThreads;
-			this.track2 = fence1.hashCode() % nThreads;
+			this.track0 = fence0.hashCode() % nThreads;
+			this.track1 = fence1.hashCode() % nThreads;
 			this.fence0 = fence0;
 			this.fence1 = fence1;
-			this.forbids = track1 == track2 ? 0 : 1;
+			this.forbids = track0 == track1 ? 0 : 1;
 		}
 
 		@Override
 		public void weakUp() {
+			Threadripper.this.weakUp(track0);
 			Threadripper.this.weakUp(track1);
-			Threadripper.this.weakUp(track2);
 		}
 
 		@Override
 		public boolean isTrack(int track) {
-			return track1 == track || track2 == track;
+			return track0 == track || track1 == track;
 		}
 
 		@Override
 		public boolean isAloneTrack() {
-			return track1 == track2;
+			return track0 == track1;
 		}
 
 		@Override
@@ -1063,6 +1058,17 @@ public class Threadripper extends AbstractExplorerService {
 					}
 					return true;
 				}
+			}
+		}
+
+		@Override
+		public void release(int track) {
+			this.intercepted = false;
+			if (track0 != track) {
+				Threadripper.this.weakUp(track0);
+			}
+			if (track1 != track) {
+				Threadripper.this.weakUp(track1);
 			}
 		}
 	}
@@ -1142,6 +1148,20 @@ public class Threadripper extends AbstractExplorerService {
 					}
 					return true;
 				}
+			}
+		}
+
+		@Override
+		public void release(int track) {
+			this.intercepted = false;
+			if (track0 != track) {
+				Threadripper.this.weakUp(track0);
+			}
+			if (track1 != track) {
+				Threadripper.this.weakUp(track1);
+			}
+			if (track2 != track) {
+				Threadripper.this.weakUp(track2);
 			}
 		}
 	}
@@ -1234,6 +1254,16 @@ public class Threadripper extends AbstractExplorerService {
 						}
 					}
 					return true;
+				}
+			}
+		}
+
+		@Override
+		public void release(int track) {
+			this.intercepted = false;
+			for (int i = 0; i < size; i++) {
+				if ((bits & (1L << i)) != 0) {
+					Threadripper.this.weakUp(i);
 				}
 			}
 		}

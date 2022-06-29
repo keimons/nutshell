@@ -23,7 +23,7 @@ public class InterceptorTest {
 					System.out.println("跳过任务");
 				} else {
 					System.out.println("执行任务");
-					interceptor.release();
+					interceptor.release(0);
 				}
 			});
 			thread.start();
