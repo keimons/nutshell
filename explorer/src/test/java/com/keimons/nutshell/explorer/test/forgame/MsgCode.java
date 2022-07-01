@@ -24,15 +24,5 @@ public @interface MsgCode {
 	 * @return 附加的屏障策略
 	 * @see MsgGroup#strategies() 再此的基础上，附加一些屏障
 	 */
-	Class<? extends FenceStrategy>[] attach() default {};
-
-	/**
-	 * 覆盖屏障策略
-	 * <p>
-	 * 使用此屏障策略，覆盖所有配置。
-	 *
-	 * @return 屏障策略
-	 * @see MsgGroup#strategies() 将被覆盖
-	 */
-	Class<? extends FenceStrategy>[] cover() default {};
+	Class<? extends FenceStrategy> strategies();
 }

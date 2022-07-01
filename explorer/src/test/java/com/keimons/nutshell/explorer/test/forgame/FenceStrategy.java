@@ -20,5 +20,5 @@ public interface FenceStrategy {
 	 * @param request 请求
 	 * @return 屏障
 	 */
-	Object getFence(Player player, JsonObject request);
+	Object[] getFences(Player player, JsonObject request);
 }

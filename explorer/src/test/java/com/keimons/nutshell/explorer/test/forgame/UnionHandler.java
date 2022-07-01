@@ -10,19 +10,16 @@ import java.util.Map;
  * @version 1.0
  * @since 11
  **/
-@MsgGroup(opCode = 1000, desc = "组织相关协议", strategies = {CommonStrategy.PlayerIdPolicy.class})
+@MsgGroup(opCode = 1000, desc = "组织相关协议")
 public class UnionHandler {
 
 	private static final Map<String, Union> unions = new HashMap<>();
 
-	@MsgCode(opCode = 1001, desc = "查找组织")
-	public Object findUnion(Player player, JsonObject json) {
-		return unions;
-	}
-
-	@MsgCode(opCode = 1002, desc = "加入组织", attach = UnionIdFencePolicy.class)
-	public Object joinUnion(Player player, JsonObject json) {
+	@MsgCode(opCode = 1006, desc = "组织捐献", strategies = PlayerIdAndUnionIdPolicy.class)
+	public Object donate(Player player, JsonObject json) {
+//		player.cost();
 		String unionId = json.getString("unionId");
+//		Union unionId = unions.get(json.getString("unionId"));
 		Union union = unions.get(unionId);
 		int memberCount = union.getMemberCount();
 		if (memberCount < 100) {
@@ -34,47 +31,14 @@ public class UnionHandler {
 		}
 	}
 
-	@MsgCode(opCode = 1003, desc = "踢出组织", attach = {UnionIdByPlayerFencePolicy.class, TargetIdFencePolicy.class})
-	public Object exitUnion(Player player, JsonObject json) {
-		String unionId = player.getUnionId();
-		String targetId = json.getString("targetId");
-		Union union = unions.get(unionId);
-		if (union != null) {
-			Player member = union.getMember(targetId);
-			member.setUnionId(null);
-			return union.removeMember(targetId);
-		} else {
-			return false;
-		}
-	}
-
-	@MsgCode(opCode = 1004, desc = "处理加入组织", cover = {UnionIdByPlayerFencePolicy.class, TargetIdFencePolicy.class})
-	public Object handleJoinUnion(Player player, JsonObject json) {
-		return null;
-	}
-
-	public static class UnionIdFencePolicy implements FenceStrategy {
+	public static class PlayerIdAndUnionIdPolicy implements FenceStrategy {
 
 		@Override
-		public Object getFence(Player player, JsonObject request) {
-			return request.getString("unionId");
-		}
-	}
-
-	public static class UnionIdByPlayerFencePolicy implements FenceStrategy {
-
-		@Override
-		public Object getFence(Player player, JsonObject request) {
-			// check
-			return player.getUnionId();
-		}
-	}
-
-	public static class TargetIdFencePolicy implements FenceStrategy {
-
-		@Override
-		public Object getFence(Player player, JsonObject request) {
-			return request.getString("targetId");
+		public Object[] getFences(Player player, JsonObject request) {
+			Object[] fences = new Object[2];
+			fences[0] = player.getPlayerId();
+			fences[1] = request.getString("unionId");
+			return fences;
 		}
 	}
 }
