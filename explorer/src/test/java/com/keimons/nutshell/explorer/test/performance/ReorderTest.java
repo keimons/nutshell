@@ -25,7 +25,7 @@ public class ReorderTest {
 
 	private static final int THREAD = 4;
 
-	private static final int BARRIER = 5;
+	private static final int BARRIER = 100;
 
 	/**
 	 * 测试次数
@@ -76,6 +76,7 @@ public class ReorderTest {
 					explorer.execute(() -> {
 					}, mark + (THREAD << 2));
 				}
+				System.out.println(111);
 				explorer.execute(() -> System.out.println(Thread.currentThread() + ": " + (System.currentTimeMillis() - time.get())), mark + THREAD);
 				break;
 			}

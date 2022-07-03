@@ -19,8 +19,8 @@ public class DemoMultiHashExecutor extends MultiHashExecutor {
         Set<Integer> threads = Stream.of(fences)
                 .map(fence -> fence.hashCode() % DEFAULT_N_THREAD)
                 .collect(Collectors.toSet());
-        // 构造一个实现贼垃圾的包装任务
-        LJInterceptor wrapperTask = new LJInterceptor(task, threads.size());
+        // 构造一个采用休眠策略带有拦截器的任务
+        SleepInterceptorTask wrapperTask = new SleepInterceptorTask(task, threads.size());
         // 把这个任务，丢给多个线程
         threads.forEach(index -> WORKERS[index].offer(wrapperTask));
     }

@@ -36,6 +36,13 @@ public class Player {
 	 */
 	private String unionId;
 
+	/**
+	 * 玩家所在队伍
+	 * <p>
+	 * 取值为：{@link String}队伍ID或者{@code null}表示没有组织。
+	 */
+	private String teamId;
+
 	public String getPlayerId() {
 		return playerId;
 	}
@@ -74,5 +81,13 @@ public class Player {
 
 	public void setUnionId(String unionId) {
 		this.unionId = unionId;
+	}
+
+	public String getTeamId() {
+		return teamId;
+	}
+
+	public void setTeamId(String teamId) {
+		this.teamId = teamId;
 	}
 }
