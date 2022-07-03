@@ -5,6 +5,7 @@ package com.keimons.nutshell.explorer.test.demo;
  * <p>
  * 设计目标：
  * <ol>
+ *     <li>保持无锁化设计；</li>
  *     <li>任务只能被执行一次；</li>
  *     <li><b>带有多个执行屏障的任务，对于每个执行屏障都是串行的</b>；</li>
  *     <li>尽可能的提升性能。</li>

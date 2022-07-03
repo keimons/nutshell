@@ -15,11 +15,9 @@ public class UnionHandler {
 
 	private static final Map<String, Union> unions = new HashMap<>();
 
-	@MsgCode(opCode = 1006, desc = "组织捐献", strategies = PlayerIdAndUnionIdPolicy.class)
-	public Object donate(Player player, JsonObject json) {
-//		player.cost();
+	@MsgCode(opCode = 1001, desc = "加入组织", strategies = PlayerIdAndUnionIdPolicy.class)
+	public Object join(Player player, JsonObject json) {
 		String unionId = json.getString("unionId");
-//		Union unionId = unions.get(json.getString("unionId"));
 		Union union = unions.get(unionId);
 		int memberCount = union.getMemberCount();
 		if (memberCount < 100) {
