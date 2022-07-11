@@ -1,13 +1,12 @@
 package com.keimons.nutshell.explorer.support;
 
-import com.keimons.deepjson.util.UnsafeUtil;
+import com.keimons.nutshell.core.OptimisticSynchronizer;
 import com.keimons.nutshell.explorer.*;
 import com.keimons.nutshell.explorer.internal.DefaultEventBus;
 import com.keimons.nutshell.explorer.internal.EventBus;
-import com.keimons.nutshell.explorer.utils.XUtils;
+import com.keimons.nutshell.explorer.utils.MiscUtils;
 import jdk.internal.vm.annotation.Contended;
 import org.jetbrains.annotations.Nullable;
-import sun.misc.Unsafe;
 
 import java.lang.invoke.VarHandle;
 import java.util.Collections;
@@ -70,7 +69,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  **/
 public class Threadripper extends AbstractExplorerService {
 
@@ -107,6 +106,8 @@ public class Threadripper extends AbstractExplorerService {
 	 */
 	private final Walker[] walkers;
 
+	private final Sync[] syncs;
+
 	/**
 	 * 守望线程
 	 */
@@ -120,10 +121,12 @@ public class Threadripper extends AbstractExplorerService {
 		super(name, nThreads, rejectedHandler, threadFactory);
 		eventBus = new DefaultEventBus<>(capacity);
 		walkers = new Walker[nThreads];
+		syncs = new Sync[nThreads];
 		for (int track = 0; track < nThreads; track++) {
 			Walker walker = new Walker(track);
 			walker.thread.start();
 			walkers[track] = walker;
+			syncs[track] = walker.sync;
 		}
 		watcher = new Watcher();
 	}
@@ -134,13 +137,8 @@ public class Threadripper extends AbstractExplorerService {
 	 * @param track 轨道
 	 */
 	private void weakUp(int track) {
-		Walker worker = walkers[track];
-		OptimisticLock lock = worker.lock;
-		lock.increment();
-		if (lock.blocked) {
-			lock.blocked = false;
-			LockSupport.unpark(worker.thread);
-		}
+		Sync sync = syncs[track];
+		sync.acquireWrite();
 	}
 
 	/**
@@ -395,7 +393,7 @@ public class Threadripper extends AbstractExplorerService {
 	 *
 	 * @author houyn[monkey@keimons.com]
 	 * @version 1.0
-	 * @since 11
+	 * @since 17
 	 **/
 	private class Walker implements Runnable {
 
@@ -423,7 +421,7 @@ public class Threadripper extends AbstractExplorerService {
 		 * 乐观锁是一个很精妙的设计，通过这个锁，可以防止事件发布到消息队列，但是没能唤醒对应的处理器。
 		 * Explorer尝试了很多种实现，最终选定乐观锁的解决方案。它的性能要远高于{@link Condition}。
 		 */
-		private final OptimisticLock lock = new OptimisticLock();
+		private final Sync sync;
 
 		/**
 		 * 缓存队列写入位置
@@ -469,6 +467,7 @@ public class Threadripper extends AbstractExplorerService {
 		public Walker(int track) {
 			this.track = track;
 			this.thread = threadFactory.newThread(this);
+			sync = new Sync(thread);
 		}
 
 		/**
@@ -567,8 +566,8 @@ public class Threadripper extends AbstractExplorerService {
 				if (state >= SHUTDOWN || (state >= CLOSE && eventBus.eof(readerIndex) && barrierIndex <= 0 && cacheIndex <= 0)) {
 					return null;
 				}
-				OptimisticLock lock = this.lock;
-				int stamp = lock.stamp;
+				Sync sync = this.sync;
+				int stamp = sync.acquireRead();
 				for (int i = 0; i < barrierIndex; i++) {
 					node = barriers[i];
 					if (!node.isIntercepted()) {
@@ -616,13 +615,7 @@ public class Threadripper extends AbstractExplorerService {
 						addCache(node);
 					}
 				} else {
-					lock.blocked = true;
-					// 在读取过程中，是否发生过变化
-					if (stamp != lock.stamp) {
-						lock.blocked = false;
-						continue;
-					}
-					LockSupport.park();
+					sync.validate(stamp);
 				}
 			}
 		}
@@ -668,7 +661,7 @@ public class Threadripper extends AbstractExplorerService {
 
 	// region Node
 
-	private static final VarHandle VV = XUtils.findVarHandle(AbstractNode.class, "forbids", int.class);
+	private static final VarHandle VV = MiscUtils.findVarHandle(AbstractNode.class, "forbids", int.class);
 
 	/**
 	 * 节点
@@ -955,18 +948,16 @@ public class Threadripper extends AbstractExplorerService {
 		@Override
 		public boolean isReorder(Node other) {
 			switch (other.size()) {
-				case 1: {
-					throw new IllegalStateException();
-				}
-				case 2: {
+				case 1 -> throw new IllegalStateException();
+				case 2 -> {
 					Node2 node2 = (Node2) other;
 					return !(node2.fence0.equals(fence) || node2.fence1.equals(fence));
 				}
-				case 3: {
+				case 3 -> {
 					Node3 node3 = (Node3) other;
 					return !(node3.fence0.equals(fence) || node3.fence1.equals(fence) || node3.fence2.equals(fence));
 				}
-				default: {
+				default -> {
 					NodeX nodeX = (NodeX) other;
 					for (int i = 0, count = nodeX.size; i < count; i++) {
 						Object v = nodeX.fences[i];
@@ -1037,18 +1028,16 @@ public class Threadripper extends AbstractExplorerService {
 		@Override
 		public boolean isReorder(Node other) {
 			switch (other.size()) {
-				case 1: {
-					throw new IllegalStateException();
-				}
-				case 2: {
+				case 1 -> throw new IllegalStateException();
+				case 2 -> {
 					Node2 node = (Node2) other;
 					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence1.equals(fence0) || node.fence1.equals(fence1));
 				}
-				case 3: {
+				case 3 -> {
 					Node3 node = (Node3) other;
 					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence1.equals(fence0) || node.fence1.equals(fence1) || node.fence2.equals(fence0) || node.fence2.equals(fence1));
 				}
-				default: {
+				default -> {
 					NodeX node = (NodeX) other;
 					for (int i = 0; i < node.size; i++) {
 						Object v = node.fences[i];
@@ -1127,18 +1116,16 @@ public class Threadripper extends AbstractExplorerService {
 		@Override
 		public boolean isReorder(Node other) {
 			switch (other.size()) {
-				case 1: {
-					throw new IllegalStateException();
-				}
-				case 2: {
+				case 1 -> throw new IllegalStateException();
+				case 2 -> {
 					Node2 node = (Node2) other;
 					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence0.equals(fence2) || node.fence1.equals(fence0) || node.fence1.equals(fence1) || node.fence1.equals(fence2));
 				}
-				case 3: {
+				case 3 -> {
 					Node3 node = (Node3) other;
 					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence0.equals(fence2) || node.fence1.equals(fence0) || node.fence1.equals(fence1) || node.fence1.equals(fence2) || node.fence2.equals(fence0) || node.fence2.equals(fence1) || node.fence2.equals(fence2));
 				}
-				default: {
+				default -> {
 					NodeX node = (NodeX) other;
 					for (int i = 0; i < node.size; i++) {
 						Object v = node.fences[i];
@@ -1220,10 +1207,8 @@ public class Threadripper extends AbstractExplorerService {
 		@Override
 		public boolean isReorder(Node other) {
 			switch (other.size()) {
-				case 1: {
-					throw new IllegalStateException();
-				}
-				case 2: {
+				case 1 -> throw new IllegalStateException();
+				case 2 -> {
 					Node2 node = (Node2) other;
 					for (int i = 0; i < size; i++) {
 						Object fence = fences[i];
@@ -1233,7 +1218,7 @@ public class Threadripper extends AbstractExplorerService {
 					}
 					return true;
 				}
-				case 3: {
+				case 3 -> {
 					Node3 node = (Node3) other;
 					for (int i = 0; i < size; i++) {
 						Object fence = fences[i];
@@ -1243,7 +1228,7 @@ public class Threadripper extends AbstractExplorerService {
 					}
 					return true;
 				}
-				default: {
+				default -> {
 					NodeX node = (NodeX) other;
 					for (int i = 0; i < node.size; i++) {
 						Object v = node.fences[i];
@@ -1335,39 +1320,66 @@ public class Threadripper extends AbstractExplorerService {
 	}
 
 	/**
-	 * 乐观锁
+	 * 乐观同步器实现
 	 * <p>
-	 * 通过版本的概念，实现了一个很精妙的设计。
+	 * 用于多生产者-单消费者模型中的消费者唤醒。判断事件总线读取期间，是否有新事件进入。
 	 */
 	@Contended
-	private static class OptimisticLock {
+	private static class Sync implements OptimisticSynchronizer {
 
-		private static final Unsafe UNSAFE = UnsafeUtil.getUnsafe();
+		private static final VarHandle VV = MiscUtils.findVarHandle(Sync.class, "stamp", int.class);
 
-		private static final long OFFSET;
+		private static final VarHandle BB = MiscUtils.findVarHandle(Sync.class, "blocked", boolean.class);
 
-		static {
-			try {
-				OFFSET = UNSAFE.objectFieldOffset(OptimisticLock.class.getDeclaredField("stamp"));
-			} catch (NoSuchFieldException e) {
-				throw new RuntimeException(e);
+		/**
+		 * 版本控制
+		 * <p>
+		 * 读取事件总线前和读取事件总线后，如果发生过版本的变更，则代表读取期间有新事件发布。
+		 */
+		private volatile int stamp;
+
+		/**
+		 * 状态控制
+		 * <p>
+		 * 如果在读取期间，发生过版本变更，则会触发状态的变更，状态变更
+		 */
+		private volatile boolean blocked;
+
+		final Thread thread;
+
+		private Sync(Thread thread) {
+			this.thread = thread;
+		}
+
+		@Override
+		public int acquireRead() {
+			return stamp;
+		}
+
+		@Override
+		public void acquireWrite() {
+			// 版本变更
+			VV.getAndAddRelease(this, 1);
+			// 验证状态
+			if (blocked) {
+				// 状态变更
+				BB.setRelease(this, false);
+				LockSupport.unpark(thread);
 			}
 		}
 
-		/**
-		 * 邮票
-		 * <p>
-		 * 事实上，这是一个戳，或者是一个版本，通过比较两个戳，判断在这一段期间，所监控的资源是否发生过改变。
-		 */
-		volatile int stamp;
-
-		/**
-		 * 锁的持有者线程是否阻塞
-		 */
-		volatile boolean blocked;
-
-		void increment() {
-			UNSAFE.getAndAddInt(this, OFFSET, 1);
+		@Override
+		public void validate(int stamp) {
+			// 悲观地认为队列中已经没有消息了，设置线程状态为休眠
+			BB.setRelease(this, true);
+			// 判断读取过程中，事件总线是否发生过版本变更
+			if (stamp == this.stamp) {
+				// 未发生版本变更，线程开始休眠，等待生产者唤醒
+				LockSupport.park();
+			} else {
+				// 已发生版本变更，需要回滚状态，继续消耗消息队列
+				BB.setRelease(this, false);
+			}
 		}
 	}
 }

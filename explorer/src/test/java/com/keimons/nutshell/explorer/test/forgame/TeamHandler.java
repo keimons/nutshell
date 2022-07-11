@@ -8,7 +8,7 @@ import java.util.Map;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  **/
 @MsgGroup(opCode = 2000, desc = "组队相关协议")
 public class TeamHandler {
@@ -28,7 +28,6 @@ public class TeamHandler {
 			return false;
 		}
 	}
-
 
 
 	public static class PlayerIdAndTeamIdPolicy implements FenceStrategy {

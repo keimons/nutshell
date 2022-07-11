@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer.internal;
 
-import com.keimons.nutshell.explorer.utils.XUtils;
+import com.keimons.nutshell.explorer.utils.MiscUtils;
 import jdk.internal.vm.annotation.Contended;
 import org.jetbrains.annotations.Nullable;
 
@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  **/
 public class DefaultEventBus<T> implements EventBus<T> {
 
@@ -217,7 +217,7 @@ public class DefaultEventBus<T> implements EventBus<T> {
 	 */
 	private static class Node<T> {
 
-		private static final VarHandle II = XUtils.findVarHandle(Node.class, "state", int.class);
+		private static final VarHandle II = MiscUtils.findVarHandle(Node.class, "state", int.class);
 
 		/**
 		 * 节点状态-空闲中

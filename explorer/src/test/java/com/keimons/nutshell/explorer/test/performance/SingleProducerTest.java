@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  **/
 @DisplayName("单生产者单消费者性能测试")
 public class SingleProducerTest {

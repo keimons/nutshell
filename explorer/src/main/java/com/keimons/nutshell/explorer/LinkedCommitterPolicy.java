@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  **/
 public class LinkedCommitterPolicy implements CommitterStrategy {
 
@@ -173,7 +173,7 @@ public class LinkedCommitterPolicy implements CommitterStrategy {
 	 *
 	 * @author houyn[monkey@keimons.com]
 	 * @version 1.0
-	 * @since 11
+	 * @since 17
 	 **/
 	public static class Work {
 

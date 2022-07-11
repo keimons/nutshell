@@ -11,6 +11,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * <p>
  * 任务只能执行一次，所以，由参与的线程竞争执行这个执行权限，
  * 竞争成功的线程执行任务，竞争失败的线程直接休眠。
+ *
+ * @author houyn[monkey@keimons.com]
+ * @version 1.0
+ * @since 17
  */
 public class SleepInterceptorTask implements Runnable {
 	final Runnable task; // 等待指定的任务

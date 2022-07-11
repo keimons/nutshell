@@ -7,7 +7,7 @@ import com.keimons.nutshell.core.bean.BeanDetails;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  */
 public abstract class AbstractBeanDetails<T> implements BeanDetails<T> {
 

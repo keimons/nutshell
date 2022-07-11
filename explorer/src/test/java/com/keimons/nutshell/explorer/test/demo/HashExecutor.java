@@ -21,23 +21,23 @@ package com.keimons.nutshell.explorer.test.demo;
  */
 public class HashExecutor {
 
-    protected static final int DEFAULT_N_THREAD = 20;
+	protected static final int DEFAULT_N_THREAD = 20;
 
-    protected static final Worker[] WORKERS = new Worker[DEFAULT_N_THREAD];
+	protected static final Worker[] WORKERS = new Worker[DEFAULT_N_THREAD];
 
-    static {
-        // 略 init(WORKERS);
-    }
+	static {
+		// 略 init(WORKERS);
+	}
 
-    /**
-     * 提交任务
-     *
-     * @param task  等待执行的任务，将在未来的某个时间点执行。
-     * @param fence 执行屏障，可以是{@code playerId}、{@code unionId}等{@code xxxId}，
-     *              也可以是{@link Player}、{@link Union}等对象。
-     */
-    public void execute(Runnable task, Object fence) {
-        int index = fence.hashCode() % DEFAULT_N_THREAD;
-        WORKERS[index].offer(task);
-    }
+	/**
+	 * 提交任务
+	 *
+	 * @param task  等待执行的任务，将在未来的某个时间点执行。
+	 * @param fence 执行屏障，可以是{@code playerId}、{@code unionId}等{@code xxxId}，
+	 *              也可以是{@link Player}、{@link Union}等对象。
+	 */
+	public void execute(Runnable task, Object fence) {
+		int index = fence.hashCode() % DEFAULT_N_THREAD;
+		WORKERS[index].offer(task);
+	}
 }

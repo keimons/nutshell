@@ -18,7 +18,7 @@ import java.util.Objects;
  * @see DirectExplorer 即时执行器（无队列）
  * @see SharedQueueExplorer 共享队列执行器
  * @see QueueExplorer 哈希队列执行器
- * @since 11
+ * @since 17
  **/
 public class ExecutorManager {
 

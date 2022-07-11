@@ -1,5 +1,6 @@
 package com.keimons.nutshell.explorer.test;
 
+import com.keimons.nutshell.core.OptimisticSynchronizer;
 import com.keimons.nutshell.explorer.support.Threadripper;
 import org.junit.jupiter.api.Test;
 
@@ -7,13 +8,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 /**
- * 线程唤醒测试
+ * {@link OptimisticSynchronizer}测试
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  **/
-public class WeakUpTest {
+public class OptimisticSynchronizerTest {
 
 	private static final Runnable TASK = Task::new;
 

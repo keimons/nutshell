@@ -14,7 +14,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  */
 public class QueueExplorer extends AbstractExplorerService {
 
@@ -105,7 +105,7 @@ public class QueueExplorer extends AbstractExplorerService {
 	 *
 	 * @author houyn[monkey@keimons.com]
 	 * @version 1.0
-	 * @since 11
+	 * @since 17
 	 **/
 	private abstract class AbstractExecutor implements Runnable {
 
@@ -241,7 +241,7 @@ public class QueueExplorer extends AbstractExplorerService {
 	 *
 	 * @author houyn[monkey@keimons.com]
 	 * @version 1.0
-	 * @since 11
+	 * @since 17
 	 **/
 	private final class UnboundedExecutor extends AbstractExecutor {
 
@@ -295,7 +295,7 @@ public class QueueExplorer extends AbstractExplorerService {
 	 *
 	 * @author houyn[monkey@keimons.com]
 	 * @version 1.0
-	 * @since 11
+	 * @since 17
 	 **/
 	private class FixedExecutor extends AbstractExecutor {
 

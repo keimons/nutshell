@@ -9,13 +9,13 @@ package com.keimons.nutshell.explorer.test.demo;
  */
 public class Player {
 
-    private long playerId;
+	private long playerId;
 
-    public Player(long playerId) {
-        this.playerId = playerId;
-    }
+	public Player(long playerId) {
+		this.playerId = playerId;
+	}
 
-    public long getPlayerId() {
-        return playerId;
-    }
+	public long getPlayerId() {
+		return playerId;
+	}
 }

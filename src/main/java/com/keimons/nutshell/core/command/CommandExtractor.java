@@ -7,7 +7,7 @@ package com.keimons.nutshell.core.command;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  */
 public interface CommandExtractor<IN_BOUND, OUT_BOUND, COMMAND_TYPE, MESSAGE_TYPE> {
 

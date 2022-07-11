@@ -1,7 +1,5 @@
 package com.keimons.nutshell.explorer.test.forgame;
 
-import java.awt.*;
-
 @MsgGroup(opCode = 10000, desc = "世界地图相关协议")
 public class WorldHandler {
 
