@@ -13,15 +13,15 @@ import java.util.stream.Stream;
  */
 public class DemoMultiHashExecutor extends MultiHashExecutor {
 
-    @Override
-    public synchronized void execute(Runnable task, Object... fences) {
-        // 统计哪些线程参与这个任务
-        Set<Integer> threads = Stream.of(fences)
-                .map(fence -> fence.hashCode() % DEFAULT_N_THREAD)
-                .collect(Collectors.toSet());
-        // 构造一个采用休眠策略带有拦截器的任务
-        SleepInterceptorTask wrapperTask = new SleepInterceptorTask(task, threads.size());
-        // 把这个任务，丢给多个线程
-        threads.forEach(index -> WORKERS[index].offer(wrapperTask));
-    }
+	@Override
+	public synchronized void execute(Runnable task, Object... fences) {
+		// 统计哪些线程参与这个任务
+		Set<Integer> threads = Stream.of(fences)
+				.map(fence -> fence.hashCode() % DEFAULT_N_THREAD)
+				.collect(Collectors.toSet());
+		// 构造一个采用休眠策略带有拦截器的任务
+		SleepInterceptorTask wrapperTask = new SleepInterceptorTask(task, threads.size());
+		// 把这个任务，丢给多个线程
+		threads.forEach(index -> WORKERS[index].offer(wrapperTask));
+	}
 }

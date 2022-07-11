@@ -9,7 +9,7 @@ public class JsonObject {
 
 	public JsonObject(Object... kv) {
 		for (int i = 0; i < kv.length; i += 2) {
-			json.put(kv[i].toString(), kv[i+1]);
+			json.put(kv[i].toString(), kv[i + 1]);
 		}
 	}
 

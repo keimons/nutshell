@@ -17,20 +17,20 @@ package com.keimons.nutshell.explorer.test.demo;
  */
 public class MultiHashExecutor extends HashExecutor {
 
-    @Override
-    public void execute(Runnable task, Object fence) {
-        super.execute(task, fence);
-    }
+	@Override
+	public void execute(Runnable task, Object fence) {
+		super.execute(task, fence);
+	}
 
-    public void execute(Runnable task, Object fence0, Object fence1) {
-        // ???
-    }
+	public void execute(Runnable task, Object fence0, Object fence1) {
+		// ???
+	}
 
-    public void execute(Runnable task, Object fence0, Object fence1, Object fence2) {
-        // ???
-    }
+	public void execute(Runnable task, Object fence0, Object fence1, Object fence2) {
+		// ???
+	}
 
-    public void execute(Runnable task, Object... fences) {
-        // ???
-    }
+	public void execute(Runnable task, Object... fences) {
+		// ???
+	}
 }

@@ -9,9 +9,9 @@ package com.keimons.nutshell.explorer.test.demo;
  */
 public class Union {
 
-    private int unionId;
+	private int unionId;
 
-    public int getUnionId() {
-        return unionId;
-    }
+	public int getUnionId() {
+		return unionId;
+	}
 }

@@ -16,20 +16,20 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class Worker {
 
-    private BlockingQueue<Runnable> tasks = new LinkedBlockingQueue<>();
+	private BlockingQueue<Runnable> tasks = new LinkedBlockingQueue<>();
 
-    public void offer(Runnable task) {
-        tasks.offer(task);
-    }
+	public void offer(Runnable task) {
+		tasks.offer(task);
+	}
 
-    public void startup() {
-        while (true) {
-            try {
-                Runnable take = tasks.take();// 在消息队列中 获取任务、执行任务
-                take.run();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
+	public void startup() {
+		while (true) {
+			try {
+				Runnable take = tasks.take();// 在消息队列中 获取任务、执行任务
+				take.run();
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
 }

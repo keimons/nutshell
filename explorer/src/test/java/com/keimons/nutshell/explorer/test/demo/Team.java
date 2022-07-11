@@ -9,9 +9,9 @@ package com.keimons.nutshell.explorer.test.demo;
  */
 public class Team {
 
-    private int teamId;
+	private int teamId;
 
-    public int getTeamId() {
-        return teamId;
-    }
+	public int getTeamId() {
+		return teamId;
+	}
 }

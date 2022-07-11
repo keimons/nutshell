@@ -12,16 +12,16 @@ package com.keimons.nutshell.explorer.test.demo;
  */
 public class UnionExecutor {
 
-    private static final int DEFAULT_N_THREAD = 20;
+	private static final int DEFAULT_N_THREAD = 20;
 
-    private static final Worker[] WORKERS = new Worker[DEFAULT_N_THREAD];
+	private static final Worker[] WORKERS = new Worker[DEFAULT_N_THREAD];
 
-    static {
-        // 略 init(WORKERS);
-    }
+	static {
+		// 略 init(WORKERS);
+	}
 
-    public void execute(Runnable task, Union union) {
-        int index = union.getUnionId() % DEFAULT_N_THREAD;
-        WORKERS[index].offer(task);
-    }
+	public void execute(Runnable task, Union union) {
+		int index = union.getUnionId() % DEFAULT_N_THREAD;
+		WORKERS[index].offer(task);
+	}
 }

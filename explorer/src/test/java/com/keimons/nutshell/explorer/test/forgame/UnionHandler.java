@@ -8,7 +8,7 @@ import java.util.Map;
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
- * @since 11
+ * @since 17
  **/
 @MsgGroup(opCode = 1000, desc = "组织相关协议")
 public class UnionHandler {
