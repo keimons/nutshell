@@ -67,17 +67,6 @@ public class BitsTrackBarrier implements TrackBarrier {
 		int track = hashcode % nTracks;
 		bits |= (1L << track);
 		fes.add(fence);
-
-//		Object[] fences = this.fences[track];
-//		int index = this.tracks[track];
-//		if (index >= fences.length) {
-//			Object[] tmp = new Object[index << 1];
-//			System.arraycopy(fences, 0, tmp, 0, index);
-//			fences = tmp;
-//			this.fences[track] = fences;
-//		}
-//		fences[index] = fence;
-//		this.tracks[track] = index + 1;
 	}
 
 	@Override
@@ -118,16 +107,6 @@ public class BitsTrackBarrier implements TrackBarrier {
 	}
 
 	@Override
-	public void init(int forbids) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public boolean intercept() {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
 	@ForceInline
 	public boolean tryIntercept() {
 		return forbids.getAndDecrement() > 0;
@@ -136,11 +115,6 @@ public class BitsTrackBarrier implements TrackBarrier {
 	@Override
 	public boolean isIntercepted() {
 		return intercepted;
-	}
-
-	@Override
-	public void release(int track) {
-
 	}
 
 	@Override
@@ -158,19 +132,6 @@ public class BitsTrackBarrier implements TrackBarrier {
 			throw new IllegalStateException("unknown state: " + barrier.getClass());
 		}
 		return !fes.contains(track);
-//		Object[] keys0 = this.fences[track];
-//		Object[] keys1 = other.fences[track];
-//		int index0 = this.tracks[track];
-//		int index1 = other.tracks[track];
-//		for (int i = 0; i < index0; i++) {
-//			Object k = keys0[i];
-//			for (int j = 0; j < index1; j++) {
-//				if (k.equals(keys1[j])) {
-//					return false;
-//				}
-//			}
-//		}
-//		return true;
 	}
 
 	@Override
@@ -185,15 +146,6 @@ public class BitsTrackBarrier implements TrackBarrier {
 
 	@Override
 	public void release() {
-//		for (int i = 0; i < tracks.length; i++) {
-//			int index = tracks[i];
-//			if (index > 0) {
-//				tracks[i] = 0;
-//				for (int j = 0; j < index; j++) {
-//					fences[i][j] = null;
-//				}
-//			}
-//		}
 		this.fes.clear();
 		this.bits = 0L;
 	}

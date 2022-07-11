@@ -113,9 +113,7 @@ public class ReorderTest {
 		private final AtomicInteger Index = new AtomicInteger(0);
 
 		public IndexThreadFactory() {
-			SecurityManager s = System.getSecurityManager();
-			group = (s != null) ? s.getThreadGroup() :
-					Thread.currentThread().getThreadGroup();
+			group = Thread.currentThread().getThreadGroup();
 		}
 
 		@Override

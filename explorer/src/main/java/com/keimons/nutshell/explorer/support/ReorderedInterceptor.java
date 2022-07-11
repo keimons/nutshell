@@ -19,15 +19,9 @@ public class ReorderedInterceptor implements Interceptor {
 
 	private volatile boolean intercepted;
 
-	@Override
-	public void init(int forbids) {
+	public ReorderedInterceptor(int forbids) {
 		this.intercepted = true;
 		this.forbids.set(forbids);
-	}
-
-	@Override
-	public boolean intercept() {
-		throw new UnsupportedOperationException();
 	}
 
 	@Override
@@ -41,7 +35,7 @@ public class ReorderedInterceptor implements Interceptor {
 	}
 
 	@Override
-	public void release(int track) {
+	public void release() {
 		intercepted = false;
 	}
 }
