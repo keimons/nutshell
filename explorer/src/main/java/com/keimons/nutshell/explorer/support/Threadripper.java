@@ -638,11 +638,11 @@ public class Threadripper extends AbstractExplorerService {
 				}
 				try {
 					startTime = System.currentTimeMillis();
-					node.getTask().run();
+					node.run();
 				} finally {
 					completedTasks++;
 					startTime = -1;
-					node.release(track);
+					node.release();
 				}
 			}
 			exit();
@@ -692,7 +692,7 @@ public class Threadripper extends AbstractExplorerService {
 	 * 轨道屏障
 	 * <p>
 	 */
-	public interface Node extends Interceptor {
+	public interface Node extends Runnable, Interceptor {
 
 		/**
 		 * 设置任务唯一序列
@@ -711,13 +711,6 @@ public class Threadripper extends AbstractExplorerService {
 		 * @return 任唯一序列
 		 */
 		long getSequence();
-
-		/**
-		 * 返回节点存储的任务
-		 *
-		 * @return 节点存储的任务
-		 */
-		Runnable getTask();
 
 		/**
 		 * 返回任务屏障的数量
@@ -770,18 +763,6 @@ public class Threadripper extends AbstractExplorerService {
 		 */
 		boolean isReorder(Node other);
 
-		@Override
-		@Deprecated
-		default void init(int forbids) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		@Deprecated
-		default boolean intercept() {
-			throw new UnsupportedOperationException();
-		}
-
 		/**
 		 * 尝试拦截
 		 * <p>
@@ -815,7 +796,7 @@ public class Threadripper extends AbstractExplorerService {
 		 * 如果使用对象池，需要移除其它线程持有的这个节点。
 		 */
 		@Override
-		void release(int track);
+		void release();
 	}
 
 	/**
@@ -869,11 +850,6 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public Runnable getTask() {
-			return task;
-		}
-
-		@Override
 		public int size() {
 			return size;
 		}
@@ -890,6 +866,11 @@ public class Threadripper extends AbstractExplorerService {
 		@Override
 		public boolean isIntercepted() {
 			return intercepted;
+		}
+
+		@Override
+		public void run() {
+			task.run();
 		}
 	}
 
@@ -918,11 +899,6 @@ public class Threadripper extends AbstractExplorerService {
 		@Override
 		public long getSequence() {
 			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public Runnable getTask() {
-			return task;
 		}
 
 		@Override
@@ -982,8 +958,13 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public void release(int track) {
+		public void release() {
 			// do nothing
+		}
+
+		@Override
+		public void run() {
+			task.run();
 		}
 	}
 
@@ -1051,14 +1032,10 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public void release(int track) {
+		public void release() {
 			this.intercepted = false;
-			if (track0 != track) {
-				Threadripper.this.weakUp(track0);
-			}
-			if (track1 != track) {
-				Threadripper.this.weakUp(track1);
-			}
+			Threadripper.this.weakUp(track0);
+			Threadripper.this.weakUp(track1);
 		}
 	}
 
@@ -1139,17 +1116,11 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public void release(int track) {
+		public void release() {
 			this.intercepted = false;
-			if (track0 != track) {
-				Threadripper.this.weakUp(track0);
-			}
-			if (track1 != track) {
-				Threadripper.this.weakUp(track1);
-			}
-			if (track2 != track) {
-				Threadripper.this.weakUp(track2);
-			}
+			Threadripper.this.weakUp(track0);
+			Threadripper.this.weakUp(track1);
+			Threadripper.this.weakUp(track2);
 		}
 	}
 
@@ -1244,7 +1215,7 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public void release(int track) {
+		public void release() {
 			this.intercepted = false;
 			for (int i = 0; i < size; i++) {
 				if ((bits & (1L << i)) != 0) {

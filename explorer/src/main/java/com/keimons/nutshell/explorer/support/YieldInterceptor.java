@@ -36,25 +36,9 @@ public class YieldInterceptor implements Interceptor {
 	 */
 	private volatile boolean release = true;
 
-	@Override
-	public void init(int forbids) {
+	public YieldInterceptor(int forbids) {
 		this.release = false;
 		this.forbids.set(forbids);
-	}
-
-	@Override
-	public boolean intercept() {
-		if (tryIntercept()) {
-			for (; ; ) {
-				if (release) {
-					return true;
-				} else {
-					Thread.yield();
-				}
-			}
-		} else {
-			return false;
-		}
 	}
 
 	@Override
@@ -68,7 +52,7 @@ public class YieldInterceptor implements Interceptor {
 	}
 
 	@Override
-	public void release(int track) {
+	public void release() {
 		release = true;
 	}
 }

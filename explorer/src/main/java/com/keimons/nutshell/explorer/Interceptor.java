@@ -1,7 +1,5 @@
 package com.keimons.nutshell.explorer;
 
-import jdk.internal.vm.annotation.ForceInline;
-
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.LockSupport;
 
@@ -56,29 +54,12 @@ import java.util.concurrent.locks.LockSupport;
 public interface Interceptor {
 
 	/**
-	 * 初始化
-	 *
-	 * @param forbids 拦截量
-	 */
-	void init(int forbids);
-
-	/**
 	 * 尝试拦截当前线程
 	 * <p>
 	 * 对于拦截量以内的线程进行拦截，后续线程放行。
 	 *
 	 * @return {@code true}拦截成功，{@code false}拦截失败
 	 */
-	boolean intercept();
-
-	/**
-	 * 尝试拦截当前线程
-	 * <p>
-	 * 对于拦截量以内的线程进行拦截，后续线程放行。
-	 *
-	 * @return {@code true}拦截成功，{@code false}拦截失败
-	 */
-	@ForceInline
 	boolean tryIntercept();
 
 	/**
@@ -89,7 +70,10 @@ public interface Interceptor {
 	boolean isIntercepted();
 
 	/**
-	 *
+	 * 释放拦截器
+	 * <p>
+	 * 拦截器可能正在被多个线程持有，任务的执行完成后释放拦截器，需要注意的是：拦截器释放后，还需要唤醒其它线程，
+	 * 移除线程所持有的拦截器，拦截器的释放关乎缓存任务能否顺利执行。
 	 */
-	void release(int track);
+	void release();
 }

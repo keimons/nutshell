@@ -31,22 +31,8 @@ public class ParkInterceptor implements Interceptor {
 	 */
 	private volatile int writeIndex;
 
-	@Override
-	public void init(int forbids) {
+	public ParkInterceptor(int forbids) {
 		this.forbids = forbids;
-		if (threads == null || forbids > threads.length) {
-			this.threads = new Thread[forbids];
-		}
-	}
-
-	@Override
-	public boolean intercept() {
-		if (tryIntercept()) {
-			LockSupport.park();
-			return true;
-		} else {
-			return false;
-		}
 	}
 
 	/**
@@ -79,7 +65,7 @@ public class ParkInterceptor implements Interceptor {
 	}
 
 	@Override
-	public void release(int track) {
+	public void release() {
 		for (int i = 0; i < forbids; i++) {
 			LockSupport.unpark(threads[i]);
 			threads[i] = null;
