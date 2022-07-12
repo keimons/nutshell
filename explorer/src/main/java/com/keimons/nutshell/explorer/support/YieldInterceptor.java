@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer.support;
 
-import com.keimons.nutshell.explorer.Interceptor;
+import com.keimons.nutshell.core.Interceptor;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -34,7 +34,7 @@ public class YieldInterceptor implements Interceptor {
 	 * <p>
 	 * 当某个线程执行{@link #release()}后，放行所有正在拦截的线程。
 	 */
-	private volatile boolean release = true;
+	private volatile boolean release;
 
 	public YieldInterceptor(int forbids) {
 		this.release = false;
@@ -48,7 +48,7 @@ public class YieldInterceptor implements Interceptor {
 
 	@Override
 	public boolean isIntercepted() {
-		return false;
+		return release;
 	}
 
 	@Override

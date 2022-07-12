@@ -33,9 +33,9 @@ public class LinkedCommitterPolicy implements CommitterStrategy {
 	}
 
 	@Override
-	public void commit(Object key, int executorStrategy, TrackBarrier barrier, Runnable task) {
+	public void commit(Object key, int executorStrategy, Runnable task, Object... fences) {
 		Committer committer = committers.computeIfAbsent(key, Committer::new);
-		committer.commitTask(executorStrategy, barrier, task);
+		committer.commitTask(executorStrategy, task, fences);
 	}
 
 	@Override
@@ -102,8 +102,8 @@ public class LinkedCommitterPolicy implements CommitterStrategy {
 			this.key = key;
 		}
 
-		public void commitTask(int executorStrategy, TrackBarrier barrier, Runnable task) {
-			Work work = new Work(executorStrategy, barrier, task);
+		public void commitTask(int executorStrategy, Runnable task, Object... fences) {
+			Work work = new Work(executorStrategy, task);
 			works.offer(work);
 			activeTime = System.currentTimeMillis();
 			tryStartTask();
@@ -120,7 +120,7 @@ public class LinkedCommitterPolicy implements CommitterStrategy {
 					return;
 				}
 				ExplorerService strategy = ExecutorManager.getExecutorStrategy(work.getExecutorStrategy());
-				strategy.execute(buildLinkedTask(work), work.getBarrier());
+				strategy.execute(buildLinkedTask(work), work.getFences());
 			}
 		}
 
@@ -185,17 +185,17 @@ public class LinkedCommitterPolicy implements CommitterStrategy {
 		/**
 		 * 执行屏障
 		 */
-		private TrackBarrier barrier;
+		private Object[] fences;
 
 		/**
 		 * 准备执行的任务
 		 */
 		private Runnable task;
 
-		public Work(int executorStrategy, TrackBarrier barrier, Runnable task) {
+		public Work(int executorStrategy, Runnable task, Object... fences) {
 			this.executorStrategy = executorStrategy;
-			this.barrier = barrier;
 			this.task = task;
+			this.fences = fences;
 		}
 
 		public int getExecutorStrategy() {
@@ -206,12 +206,12 @@ public class LinkedCommitterPolicy implements CommitterStrategy {
 			this.executorStrategy = executorStrategy;
 		}
 
-		public TrackBarrier getBarrier() {
-			return barrier;
+		public Object[] getFences() {
+			return fences;
 		}
 
-		public void setBarrier(TrackBarrier barrier) {
-			this.barrier = barrier;
+		public void setFences(Object[] fences) {
+			this.fences = fences;
 		}
 
 		public Runnable getTask() {

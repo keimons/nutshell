@@ -1,29 +1,33 @@
 package com.keimons.nutshell.core;
 
-import com.keimons.nutshell.explorer.Interceptor;
-import com.keimons.nutshell.explorer.support.Threadripper;
-
 /**
  * 可运行的拦截器
  * <p>
- * 可执行的拦截器中包含：
+ * 它包含了任务相关的所有信息，根据这些信息，可以对任务的执行做一些小手脚。这些任务信息包含：
  * <ol>
- *     <li>任务唯一序列（可能没有）；</li>
+ *     <li>任务唯一序列，任务被添加到事件总线时，会被分配一个唯一ID；</li>
  *     <li>任务；</li>
- *     <li>任务屏障（可能有多个）；</li>
- *     <li>任务轨道（可能有多个）；</li>
+ *     <li>任务执行屏障（可能有多个）；</li>
+ *     <li>任务执行线程（可能有多个）；</li>
  *     <li>拦截器信息。</li>
  * </ol>
- * 它以不同的身份被多个线程持有，节点中拦截器的释放变得更加复杂且难以复用，这使得节点也变成了一次性的消耗品。
- * 在多线程环境下，它有可能会被多个{@link Threadripper.Walker}持有，持有的形式包括：
+ * 在多线程环境下，它有可能会被多个工作线程持有，持有的形式包括：
  * <ul>
  *     <li>执行屏障，此时仅作为屏障，当拦截器释放时，屏障移除。</li>
  *     <li>缓存节点，当节点无法重排序到屏障之前时，将节点缓存，等待屏障释放后才能开始处理此节点。</li>
  *     <li>执行任务，此任务由最后一个碰到它的线程执行。</li>
  * </ul>
- * 同一个节点同时只会以一种形式被一个线程所持有，这三种状态是相互冲突的。
+ * 同一个拦截器可以被多个线程持有，但每个线程所持的形式同时只会存在一种，这三种状态是相互冲突的。
  * <p>
- * 同时，节点可以判断一个任务是否能由此线程处理，只有线程轨道和任务轨道重合时，节点才能由此线程处理，否则，忽略这个节点。
+ * 同时，可运行的拦截器可以判断一个任务是否能由此线程处理，只有指定的执行线程才能处理这个任务，否则，忽略这个它。
+ * <p>
+ * <p>
+ * 可运行的拦截器，是整个设计的核心，它体现了最重要的两个概念：
+ * <ol>
+ *     <li>带有相同执行屏障的任务必须串行执行；</li>
+ *     <li>带有不同执行屏障的任务可以重排序执行。</li>
+ * </ol>
+ * 串行设计，保证执行的稳定性，提升系统的吞吐量。
  *
  * @author houyn[monkey@keimons.com]
  * @version 1.0
@@ -48,6 +52,13 @@ public interface RunnableInterceptor extends Runnable, Interceptor {
 	 * @return 任唯一序列
 	 */
 	long getSequence();
+
+	/**
+	 * 返回所有执行屏障
+	 *
+	 * @return 返回这个任务所带有的所有执行屏障
+	 */
+	Object[] getFences();
 
 	/**
 	 * 返回任务屏障的数量
@@ -82,21 +93,23 @@ public interface RunnableInterceptor extends Runnable, Interceptor {
 	boolean isTrack(int track);
 
 	/**
-	 * 返回节点是否只由一个线程处理
+	 * 返回可执行的拦截器是否独享任务
 	 * <p>
-	 * 尽管可能线程拥有多个屏障，如果多个屏障最终哈希到一个线程，那么也将由一个线程处理。
+	 * 需要注意的是，如果线程拥有多个执行屏障，但多个执行屏障经过计算，最终派发到同一个线程，
+	 * 那么这个任务也是独享任务。
 	 *
 	 * @return {@code true}单线程任务，{@code false}多线程任务。
 	 */
-	boolean isAloneTrack();
+	boolean isExclusive();
 
 	/**
-	 * 返回其它节点是否能越过此节点（屏障）重排序执行
+	 * 返回其它可执行的拦截器是否能越过当前的提前执行
 	 * <p>
+	 * 设计语言：
 	 * 如果任务屏障完全不同，则可以重排序执行，这对最终的结果不会产生影响。
 	 *
 	 * @param other 尝试越过此节点的其它节点
 	 * @return {@code true}允许越过当前节点重排序运行，{@code false}禁止越过当前节点重排序运行。
 	 */
-	boolean isReorder(Threadripper.Node other);
+	boolean isAdvance(RunnableInterceptor other);
 }

@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer.test.performance;
 
-import com.keimons.nutshell.explorer.support.Threadripper;
+import com.keimons.nutshell.explorer.support.ReorderExplorer;
 import com.keimons.nutshell.explorer.test.Task;
 import org.junit.jupiter.api.Test;
 
@@ -107,7 +107,7 @@ public class MultiProducerTest {
 //	@DisplayName("Explorer测试")
 //	@Test
 	public void testExplorer() throws InterruptedException, BrokenBarrierException, ExecutionException {
-		Threadripper explorer = new Threadripper(N_READER);
+		ReorderExplorer explorer = new ReorderExplorer(N_READER);
 		CyclicBarrier barrier = new CyclicBarrier(N_WRITER + 1);
 		for (int i = 0; i < N_WRITER; i++) {
 			int start = i;
