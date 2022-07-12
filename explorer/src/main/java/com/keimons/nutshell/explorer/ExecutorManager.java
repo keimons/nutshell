@@ -69,11 +69,11 @@ public class ExecutorManager {
 	 * 使用任务执行策略，执行一个任务
 	 *
 	 * @param executorIndex 任务执行策略
-	 * @param barrier       执行屏障
 	 * @param task          等待执行的任务
+	 * @param fences        执行屏障
 	 */
-	public static void executeTask(int executorIndex, TrackBarrier barrier, Runnable task) {
-		strategies[executorIndex].execute(task, barrier);
+	public static void executeTask(int executorIndex, Runnable task, Object... fences) {
+		strategies[executorIndex].execute(task, fences);
 	}
 
 	/**

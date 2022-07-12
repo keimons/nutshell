@@ -1,4 +1,4 @@
-package com.keimons.nutshell.explorer;
+package com.keimons.nutshell.core;
 
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.LockSupport;
@@ -44,7 +44,8 @@ import java.util.concurrent.locks.LockSupport;
  * 设计期望可选实现：
  * <ul>
  *     <li>停顿方面：{@link LockSupport#park()}或{@link Thread#yield()}。</li>
- *     <li>提升吞吐量：停顿时，根据一些规则判断后续任务是否提前执行。例如：通过给定的{@code key}，后续无关{@code key}直接执行，相关{@code key}排队执行。</li>
+ *     <li>提升吞吐量：停顿时，根据一些规则判断后续任务是否提前执行。例如：指定的执行屏障，
+ *     后续无关的执行屏障可以直接执行，相关执行屏障排队执行。</li>
  * </ul>
  *
  * @author houyn[monkey@keimons.com]

@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer.internal;
 
-import com.keimons.nutshell.explorer.TrackBarrier;
+import com.keimons.nutshell.core.RunnableInterceptor;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -70,7 +70,7 @@ import org.jetbrains.annotations.Nullable;
  * </pre>
  * 由IO线程生成任务信息并发布在环形Buffer总线上。环形buffer中发布的，不再是单个任务，而是包含Key组的任务，Key组中可能包含一个或多个Key。
  * 仅仅维护一个全局的{@code writeIndex}，每个线程维护自己的{@code readIndex}，只要{@code readIndex < writeIndex}
- * 则可以继续向下读取，如果当前位置为空，则表明此任务不是这个线程关注的任务，跳过执行，联合{@link TrackBarrier}使用。
+ * 则可以继续向下读取，如果当前位置为空，则表明此任务不是这个线程关注的任务，跳过执行，联合{@link RunnableInterceptor}使用。
  * <p>
  * 轨道缓冲区同时也是总线队列，所有任务都是发布在总线上。
  * <p>

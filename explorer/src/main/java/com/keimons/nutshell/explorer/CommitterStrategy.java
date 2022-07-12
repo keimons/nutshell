@@ -16,10 +16,9 @@ public interface CommitterStrategy {
 	 *
 	 * @param key              提交者的唯一表示
 	 * @param executorStrategy 任务执行策略
-	 * @param barrier          执行屏障
 	 * @param task             等待执行的任务
 	 */
-	void commit(Object key, int executorStrategy, TrackBarrier barrier, Runnable task);
+	void commit(Object key, int executorStrategy, Runnable task, Object... fences);
 
 	/**
 	 * 刷新

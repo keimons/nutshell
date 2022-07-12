@@ -1,7 +1,12 @@
 package com.keimons.nutshell.explorer.support;
 
 import com.keimons.nutshell.core.OptimisticSynchronizer;
-import com.keimons.nutshell.explorer.*;
+import com.keimons.nutshell.core.Ripper;
+import com.keimons.nutshell.core.RunnableInterceptor;
+import com.keimons.nutshell.explorer.AbstractExplorerService;
+import com.keimons.nutshell.explorer.ConsumerFuture;
+import com.keimons.nutshell.explorer.Explorers;
+import com.keimons.nutshell.explorer.RejectedExplorerHandler;
 import com.keimons.nutshell.explorer.internal.DefaultEventBus;
 import com.keimons.nutshell.explorer.internal.EventBus;
 import com.keimons.nutshell.explorer.utils.MiscUtils;
@@ -71,7 +76,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @version 1.0
  * @since 17
  **/
-public class Threadripper extends AbstractExplorerService {
+public class ReorderExplorer extends AbstractExplorerService implements Ripper {
 
 	/**
 	 * 默认线程队列长度
@@ -88,9 +93,9 @@ public class Threadripper extends AbstractExplorerService {
 	public static final String DEFAULT_NAME = "ReorderedExplorer";
 
 	/**
-	 * time
+	 * 超时时间
 	 */
-	private final int TIME = 2000;
+	private final int time;
 
 	private final Lock main = new ReentrantLock();
 
@@ -99,7 +104,7 @@ public class Threadripper extends AbstractExplorerService {
 	 * <p>
 	 * 所有任务都发布在事件总线上，如果事件总线不能发布任务，任务发布失败，则队列已满。
 	 */
-	private final EventBus<Node> eventBus;
+	private final EventBus<RunnableInterceptor> eventBus;
 
 	/**
 	 * 任务执行器
@@ -113,41 +118,37 @@ public class Threadripper extends AbstractExplorerService {
 	 */
 	private final Watcher watcher;
 
-	public Threadripper(int nThreads) {
+	public ReorderExplorer(int nThreads) {
 		this(DEFAULT_NAME, nThreads, nThreads * DEFAULT_THREAD_CAPACITY, DefaultRejectedHandler, Explorers.defaultThreadFactory());
 	}
 
-	public Threadripper(String name, int nThreads, int capacity, RejectedExplorerHandler rejectedHandler, ThreadFactory threadFactory) {
+	public ReorderExplorer(String name, int nThreads, int capacity, RejectedExplorerHandler rejectedHandler, ThreadFactory threadFactory) {
 		super(name, nThreads, rejectedHandler, threadFactory);
-		eventBus = new DefaultEventBus<>(capacity);
-		walkers = new Walker[nThreads];
-		syncs = new Sync[nThreads];
+		this.eventBus = new DefaultEventBus<>(capacity);
+		this.walkers = new Walker[nThreads];
+		this.syncs = new Sync[nThreads];
 		for (int track = 0; track < nThreads; track++) {
 			Walker walker = new Walker(track);
 			walker.thread.start();
 			walkers[track] = walker;
 			syncs[track] = walker.sync;
 		}
-		watcher = new Watcher();
+		this.watcher = new Watcher();
+		this.time = 2000;
 	}
 
-	/**
-	 * 唤醒线程
-	 *
-	 * @param track 轨道
-	 */
 	private void weakUp(int track) {
 		Sync sync = syncs[track];
 		sync.acquireWrite();
 	}
 
-	/**
-	 * 获取所有任务
-	 *
-	 * @return 所有任务
-	 */
-	private List<Runnable> takeTasks() {
-		return null;
+	@Override
+	public void execute(RunnableInterceptor task) {
+		if (eventBus.publishEvent(task)) {
+			task.weakUp();
+		} else {
+			rejectedHandler.rejectedExecution(this, task, task.getFences());
+		}
 	}
 
 	@Override
@@ -158,9 +159,9 @@ public class Threadripper extends AbstractExplorerService {
 		if (state > RUNNING) {
 			rejectedHandler.rejectedExecution(this, task, fence);
 		} else {
-			Node node = new Node1(task, fence);
-			if (eventBus.publishEvent(node)) {
-				node.weakUp();
+			RunnableInterceptor runnableInterceptor = new InterceptorTask1(task, fence);
+			if (eventBus.publishEvent(runnableInterceptor)) {
+				runnableInterceptor.weakUp();
 			} else {
 				rejectedHandler.rejectedExecution(this, task, fence);
 			}
@@ -174,9 +175,9 @@ public class Threadripper extends AbstractExplorerService {
 		if (state > RUNNING) {
 			rejectedHandler.rejectedExecution(this, task, fence0, fence1);
 		} else {
-			Node node = new Node2(task, fence0, fence1);
-			if (eventBus.publishEvent(node)) {
-				node.weakUp();
+			RunnableInterceptor runnableInterceptor = new InterceptorTask2(task, fence0, fence1);
+			if (eventBus.publishEvent(runnableInterceptor)) {
+				runnableInterceptor.weakUp();
 			} else {
 				rejectedHandler.rejectedExecution(this, task, fence0, fence1);
 			}
@@ -190,9 +191,9 @@ public class Threadripper extends AbstractExplorerService {
 		if (state > RUNNING) {
 			rejectedHandler.rejectedExecution(this, task, fence0, fence1, fence2);
 		} else {
-			Node node = new Node3(task, fence0, fence1, fence2);
-			if (eventBus.publishEvent(node)) {
-				node.weakUp();
+			RunnableInterceptor runnableInterceptor = new InterceptorTask3(task, fence0, fence1, fence2);
+			if (eventBus.publishEvent(runnableInterceptor)) {
+				runnableInterceptor.weakUp();
 			} else {
 				rejectedHandler.rejectedExecution(this, task, fence0, fence1, fence2);
 			}
@@ -211,9 +212,9 @@ public class Threadripper extends AbstractExplorerService {
 		if (state > RUNNING) {
 			rejectedHandler.rejectedExecution(this, task, fences);
 		} else {
-			Node node = new NodeX(task, fences);
-			if (eventBus.publishEvent(node)) {
-				node.weakUp();
+			RunnableInterceptor runnableInterceptor = new InterceptorTaskX(task, fences);
+			if (eventBus.publishEvent(runnableInterceptor)) {
+				runnableInterceptor.weakUp();
 			} else {
 				rejectedHandler.rejectedExecution(this, task, fences);
 			}
@@ -379,7 +380,7 @@ public class Threadripper extends AbstractExplorerService {
 	 * </pre>
 	 * 由IO线程生成任务信息（考虑对象池）并发布在环形Buffer总线上。环形buffer中发布的，不再是单个任务，而是包含Key组的任务，Key组中可能包含一个或多个Key。
 	 * 仅仅维护一个全局的{@code writeIndex}，每个线程维护自己的{@code readIndex}，只要{@code readIndex < writeIndex}
-	 * 则可以继续向下读取，如果当前位置为空，则表明此任务不是这个线程关注的任务，跳过执行，联合{@link TrackBarrier}使用。
+	 * 则可以继续向下读取，如果当前位置为空，则表明此任务不是这个线程关注的任务，跳过执行，联合{@link RunnableInterceptor}使用。
 	 * <p>
 	 * 轨道缓冲区同时也是总线队列，所有任务都是发布在总线上。
 	 * <p>
@@ -433,7 +434,7 @@ public class Threadripper extends AbstractExplorerService {
 		 * <p>
 		 * 被屏障拦截的节点，缓存在执行器本地，等待拦截器释放后，再执行缓存的消息。
 		 */
-		private Node[] caches = new Node[8];
+		private RunnableInterceptor[] caches = new RunnableInterceptor[8];
 
 		/**
 		 * 执行屏障写入位置
@@ -446,7 +447,7 @@ public class Threadripper extends AbstractExplorerService {
 		 * 如果一个任务将由多个线程执行，那么当线程拦截器成功时，该节点就变成了执行屏障。
 		 * 当有屏障存在时，节点必须能够重排序到所有屏障节点和所有缓存节点之前。
 		 */
-		private Node[] barriers = new Node[8];
+		private RunnableInterceptor[] barriers = new RunnableInterceptor[8];
 
 		/**
 		 * 已完成的任务数量
@@ -460,7 +461,7 @@ public class Threadripper extends AbstractExplorerService {
 		/**
 		 * 执行器构造方法
 		 * <p>
-		 * {@link Node}的真正处理者。
+		 * {@link RunnableInterceptor}的真正处理者。
 		 *
 		 * @param track 线程运行轨道
 		 */
@@ -473,15 +474,15 @@ public class Threadripper extends AbstractExplorerService {
 		/**
 		 * 增加缓存
 		 *
-		 * @param node 节点（缓存）
+		 * @param runnableInterceptor 节点（缓存）
 		 */
-		private void addCache(Node node) {
+		private void addCache(RunnableInterceptor runnableInterceptor) {
 			if (cacheIndex >= caches.length) {
-				Node[] tmp = new Node[cacheIndex << 1];
+				RunnableInterceptor[] tmp = new RunnableInterceptor[cacheIndex << 1];
 				System.arraycopy(caches, 0, tmp, 0, cacheIndex);
 				caches = tmp;
 			}
-			caches[cacheIndex++] = node;
+			caches[cacheIndex++] = runnableInterceptor;
 		}
 
 		/**
@@ -499,15 +500,15 @@ public class Threadripper extends AbstractExplorerService {
 		/**
 		 * 添加屏障
 		 *
-		 * @param node 节点（屏障）
+		 * @param runnableInterceptor 节点（屏障）
 		 */
-		private void addBarrier(Node node) {
+		private void addBarrier(RunnableInterceptor runnableInterceptor) {
 			if (barrierIndex >= barriers.length) {
-				Node[] tmp = new Node[barrierIndex << 1];
+				RunnableInterceptor[] tmp = new RunnableInterceptor[barrierIndex << 1];
 				System.arraycopy(barriers, 0, tmp, 0, barrierIndex);
 				barriers = tmp;
 			}
-			barriers[barrierIndex++] = node;
+			barriers[barrierIndex++] = runnableInterceptor;
 		}
 
 		/**
@@ -522,10 +523,10 @@ public class Threadripper extends AbstractExplorerService {
 			barriers[--barrierIndex] = null;
 		}
 
-		private boolean skip(Node node) {
+		private boolean skip(RunnableInterceptor runnableInterceptor) {
 			// 判断任务是否可以越过所有屏障执行
 			for (int i = 0; i < barrierIndex; i++) {
-				if (!node.isReorder(barriers[i])) {
+				if (!runnableInterceptor.isAdvance(barriers[i])) {
 					return false;
 				}
 			}
@@ -559,8 +560,8 @@ public class Threadripper extends AbstractExplorerService {
 		 *
 		 * @return 下一个节点
 		 */
-		private @Nullable Node next() {
-			Node node;
+		private @Nullable RunnableInterceptor next() {
+			RunnableInterceptor runnableInterceptor;
 			for (; ; ) {
 				// 状态检测，如果线程池已停止
 				if (state >= SHUTDOWN || (state >= CLOSE && eventBus.eof(readerIndex) && barrierIndex <= 0 && cacheIndex <= 0)) {
@@ -569,50 +570,50 @@ public class Threadripper extends AbstractExplorerService {
 				Sync sync = this.sync;
 				int stamp = sync.acquireRead();
 				for (int i = 0; i < barrierIndex; i++) {
-					node = barriers[i];
-					if (!node.isIntercepted()) {
+					runnableInterceptor = barriers[i];
+					if (!runnableInterceptor.isIntercepted()) {
 						removeBarrier(i);
 					}
 				}
 				for (int i = 0; i < cacheIndex; i++) {
-					node = caches[i];
-					if (skip(node)) {
+					runnableInterceptor = caches[i];
+					if (skip(runnableInterceptor)) {
 						// 这个任务已经可以执行了，所以，直接移除
 						removeCache(i);
-						if (node.tryIntercept()) {
-							addBarrier(node);
-							node.weakUp();
+						if (runnableInterceptor.tryIntercept()) {
+							addBarrier(runnableInterceptor);
+							runnableInterceptor.weakUp();
 						} else {
 //							Debug.info("Work-" + track + " 恢复任务：" + node.getTask());
-							if (!node.isAloneTrack()) {
-								eventBus.removeEvent(node.getSequence());
+							if (!runnableInterceptor.isExclusive()) {
+								eventBus.removeEvent(runnableInterceptor.getSequence());
 							}
-							return node;
+							return runnableInterceptor;
 						}
 					}
 				}
 				final long readerIndex = this.readerIndex;
 				if (readerIndex < eventBus.writerIndex()) {
-					node = eventBus.getEvent(readerIndex);
+					runnableInterceptor = eventBus.getEvent(readerIndex);
 					this.readerIndex = readerIndex + 1;
 					// 执行器
-					if (node == null || !node.isTrack(track)) {
+					if (runnableInterceptor == null || !runnableInterceptor.isTrack(track)) {
 						continue;
 					}
-					if (skip(node)) {
-						if (node.tryIntercept()) {
+					if (skip(runnableInterceptor)) {
+						if (runnableInterceptor.tryIntercept()) {
 							// only execute thread return event
-							addBarrier(node);
+							addBarrier(runnableInterceptor);
 						} else {
 							eventBus.removeEvent(readerIndex);
-							return node;
+							return runnableInterceptor;
 						}
 					} else {
-						if (node.isAloneTrack()) {
+						if (runnableInterceptor.isExclusive()) {
 							eventBus.removeEvent(readerIndex);
 						}
-						node.setSequence(readerIndex);
-						addCache(node);
+						runnableInterceptor.setSequence(readerIndex);
+						addCache(runnableInterceptor);
 					}
 				} else {
 					sync.validate(stamp);
@@ -622,8 +623,8 @@ public class Threadripper extends AbstractExplorerService {
 
 		@Override
 		public void run() {
-			Node node;
-			while ((node = next()) != null) {
+			RunnableInterceptor runnableInterceptor;
+			while ((runnableInterceptor = next()) != null) {
 				if (state >= SHUTDOWN) {
 					// 如果线程池已关闭，确保线程已经中断
 					if (!thread.isInterrupted()) {
@@ -638,11 +639,11 @@ public class Threadripper extends AbstractExplorerService {
 				}
 				try {
 					startTime = System.currentTimeMillis();
-					node.run();
+					runnableInterceptor.run();
 				} finally {
 					completedTasks++;
 					startTime = -1;
-					node.release();
+					runnableInterceptor.release();
 				}
 			}
 			exit();
@@ -661,150 +662,16 @@ public class Threadripper extends AbstractExplorerService {
 
 	// region Node
 
-	private static final VarHandle VV = MiscUtils.findVarHandle(AbstractNode.class, "forbids", int.class);
-
-	/**
-	 * 节点
-	 * <p>
-	 * 将任务相关的信息和拦截器融合到一起，继承自{@link Interceptor}，但仅实现了拦截器的部分功能。节点中包含：
-	 * <ol>
-	 *     <li>任务唯一序列（可能没有）；</li>
-	 *     <li>任务；</li>
-	 *     <li>任务屏障（可能有多个）；</li>
-	 *     <li>任务轨道（可能有多个）；</li>
-	 *     <li>拦截器信息。</li>
-	 * </ol>
-	 * 节点可以以不同的身份被多个线程持有，节点中拦截器的释放变得更加复杂且难以复用，这使得节点也变成了一次性的消耗品。
-	 * 在多线程环境下，节点有可能会被多个{@link Walker}持有，持有的形式包括：
-	 * <ul>
-	 *     <li>执行屏障，此时仅作为屏障，当拦截器释放时，屏障移除。</li>
-	 *     <li>缓存节点，当节点无法重排序到屏障之前时，将节点缓存，等待屏障释放后才能开始处理此节点。</li>
-	 *     <li>执行任务，此任务由{@link Walker}执行。</li>
-	 * </ul>
-	 * 同一个节点同时只会以一种形式被一个线程所持有，这三种状态是相互冲突的。
-	 * <p>
-	 * 同时，节点可以判断一个任务是否能由此线程处理，只有线程轨道和任务轨道重合时，节点才能由此线程处理，否则，忽略这个节点。
-	 * <p>
-	 * <p>
-	 * 注意：如果能顺利解决拦截器释放的问题，可以考虑使用对象池以提升性能。
-	 * <p>
-	 * <p>
-	 * 轨道屏障
-	 * <p>
-	 */
-	public interface Node extends Runnable, Interceptor {
-
-		/**
-		 * 设置任务唯一序列
-		 * <p>
-		 * 每一个任务在加入队列时，会给任务分配一个唯一序列。任务移除时，根据唯一序列移除任务。
-		 * <p>
-		 * 这不是必须的，例如：任务只有一个屏障，那么节点的持有是完全可预测的，此值将被忽略以节省内存。
-		 *
-		 * @param sequence 任务唯一序列
-		 */
-		void setSequence(long sequence);
-
-		/**
-		 * 获取任务唯一序列
-		 *
-		 * @return 任唯一序列
-		 */
-		long getSequence();
-
-		/**
-		 * 返回任务屏障的数量
-		 * <p>
-		 * Explorer的任务执行时，需要一个任务屏障，这个方法返回任务屏障数量。
-		 *
-		 * @return 任务屏障的数量
-		 */
-		int size();
-
-		/**
-		 * 唤醒线程
-		 * <p>
-		 * 唤醒线程的时机：
-		 * <ul>
-		 *     <li>任务发布，当任务发布到总线后，如果处理此任务的线程（们）处于休眠状态，则唤醒此线程（们）。</li>
-		 *     <li>恢复屏障，当缓存节点恢复执行并且节点拦截成功时，唤醒处理此任务的其它线程。</li>
-		 * </ul>
-		 * 唤醒线程的实现是向该线程发放一个许可，多次/重复唤醒仅发放一个许可，当线程被唤醒后，许可被消耗。
-		 * 线程多次被唤醒，仅仅会造成一些性能上的浪费，并不会造成运行时的问题。
-		 */
-		void weakUp();
-
-		/**
-		 * 返回此节点是否属于这个轨道
-		 * <p>
-		 * 任务附加的屏障同时决定了任务由哪个线程处理。这个方法用于判断某一个线程能否处理这个节点。
-		 *
-		 * @param track 轨道
-		 * @return {@code true}线程处理此节点，{@code false}线程忽略此节点。
-		 */
-		boolean isTrack(int track);
-
-		/**
-		 * 返回节点是否只由一个线程处理
-		 * <p>
-		 * 尽管可能线程拥有多个屏障，如果多个屏障最终哈希到一个线程，那么也将由一个线程处理。
-		 *
-		 * @return {@code true}单线程任务，{@code false}多线程任务。
-		 */
-		boolean isAloneTrack();
-
-		/**
-		 * 返回其它节点是否能越过此节点（屏障）重排序执行
-		 * <p>
-		 * 如果任务屏障完全不同，则可以重排序执行，这对最终的结果不会产生影响。
-		 *
-		 * @param other 尝试越过此节点的其它节点
-		 * @return {@code true}允许越过当前节点重排序运行，{@code false}禁止越过当前节点重排序运行。
-		 */
-		boolean isReorder(Node other);
-
-		/**
-		 * 尝试拦截
-		 * <p>
-		 * 尝试拦截当前线程，并返回是否拦截成功。拦截线程会发生：
-		 * <ul>
-		 *     <li>拦截成功，那么该线程无法执行此任务，应将此节点作为执行屏障，拦截后续带有相同屏障的节点。</li>
-		 *     <li>拦截失败，将由该线程执行此任务，并且在任务执行完成后，释放此拦截器。</li>
-		 * </ul>
-		 *
-		 * @return {@code true}拦截成功，{@code false}拦截失败。
-		 * @see Interceptor 拦截器的真正实现
-		 */
-		@Override
-		boolean tryIntercept();
-
-		/**
-		 * 是否拦截
-		 * <p>
-		 * 当拦截器生效，拦截后续所有节点中拥有相同屏障的节点，并将其缓存，没有相同屏障的节点重排序运行。当拦截器释放后，
-		 * 其它线程应放弃对于此节点的持有，并移除节点。
-		 *
-		 * @return {@code true}正在拦截，{@code false}拦截器已释放。
-		 */
-		@Override
-		boolean isIntercepted();
-
-		/**
-		 * 释放节点（拦截器）
-		 * <p>
-		 * 由任务执行线程在任务完成后释放拦截器，可选实现：节点作为一次性的，无需唤醒其它线程；
-		 * 如果使用对象池，需要移除其它线程持有的这个节点。
-		 */
-		@Override
-		void release();
-	}
-
 	/**
 	 * 任务节点的抽象实现
 	 * <p>
 	 * 包含：任务唯一序列、任务、执行屏障数量、拦截量、是否拦截。
 	 */
-	public abstract static class AbstractNode implements Node {
+	public abstract static class AbstractInterceptorTask implements RunnableInterceptor {
+
+		protected static final VarHandle VV = MiscUtils.findVarHandle(
+				AbstractInterceptorTask.class, "forbids", int.class
+		);
 
 		/**
 		 * 任务唯一序列
@@ -834,9 +701,9 @@ public class Threadripper extends AbstractExplorerService {
 		 */
 		protected volatile boolean intercepted = true;
 
-		protected AbstractNode(Runnable task, int size) {
-			this.size = size;
+		protected AbstractInterceptorTask(Runnable task, int size) {
 			this.task = task;
+			this.size = size;
 		}
 
 		@Override
@@ -877,7 +744,7 @@ public class Threadripper extends AbstractExplorerService {
 	/**
 	 * 带有1个屏障的节点
 	 */
-	private class Node1 implements Node {
+	private class InterceptorTask1 implements RunnableInterceptor {
 
 		protected final Runnable task;
 
@@ -885,7 +752,7 @@ public class Threadripper extends AbstractExplorerService {
 
 		private final int track;
 
-		public Node1(Runnable task, Object fence) {
+		public InterceptorTask1(Runnable task, Object fence) {
 			this.task = task;
 			this.track = fence.hashCode() % nThreads;
 			this.fence = fence;
@@ -902,13 +769,18 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
+		public Object[] getFences() {
+			return new Object[]{fence};
+		}
+
+		@Override
 		public int size() {
 			return 0;
 		}
 
 		@Override
 		public void weakUp() {
-			Threadripper.this.weakUp(track);
+			ReorderExplorer.this.weakUp(track);
 		}
 
 		@Override
@@ -917,24 +789,24 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public boolean isAloneTrack() {
+		public boolean isExclusive() {
 			return true;
 		}
 
 		@Override
-		public boolean isReorder(Node other) {
+		public boolean isAdvance(RunnableInterceptor other) {
 			switch (other.size()) {
 				case 1 -> throw new IllegalStateException();
 				case 2 -> {
-					Node2 node2 = (Node2) other;
+					InterceptorTask2 node2 = (InterceptorTask2) other;
 					return !(node2.fence0.equals(fence) || node2.fence1.equals(fence));
 				}
 				case 3 -> {
-					Node3 node3 = (Node3) other;
+					InterceptorTask3 node3 = (InterceptorTask3) other;
 					return !(node3.fence0.equals(fence) || node3.fence1.equals(fence) || node3.fence2.equals(fence));
 				}
 				default -> {
-					NodeX nodeX = (NodeX) other;
+					InterceptorTaskX nodeX = (InterceptorTaskX) other;
 					for (int i = 0, count = nodeX.size; i < count; i++) {
 						Object v = nodeX.fences[i];
 						if (v.equals(fence)) {
@@ -971,7 +843,7 @@ public class Threadripper extends AbstractExplorerService {
 	/**
 	 * 带有2个屏障的节点
 	 */
-	private class Node2 extends AbstractNode {
+	private class InterceptorTask2 extends AbstractInterceptorTask {
 
 		private final int track0;
 
@@ -981,7 +853,7 @@ public class Threadripper extends AbstractExplorerService {
 
 		private final Object fence1;
 
-		public Node2(Runnable task, Object fence0, Object fence1) {
+		public InterceptorTask2(Runnable task, Object fence0, Object fence1) {
 			super(task, 2);
 			this.track0 = fence0.hashCode() % nThreads;
 			this.track1 = fence1.hashCode() % nThreads;
@@ -991,9 +863,14 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
+		public Object[] getFences() {
+			return new Object[]{fence0, fence1};
+		}
+
+		@Override
 		public void weakUp() {
-			Threadripper.this.weakUp(track0);
-			Threadripper.this.weakUp(track1);
+			ReorderExplorer.this.weakUp(track0);
+			ReorderExplorer.this.weakUp(track1);
 		}
 
 		@Override
@@ -1002,24 +879,24 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public boolean isAloneTrack() {
+		public boolean isExclusive() {
 			return track0 == track1;
 		}
 
 		@Override
-		public boolean isReorder(Node other) {
+		public boolean isAdvance(RunnableInterceptor other) {
 			switch (other.size()) {
 				case 1 -> throw new IllegalStateException();
 				case 2 -> {
-					Node2 node = (Node2) other;
+					InterceptorTask2 node = (InterceptorTask2) other;
 					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence1.equals(fence0) || node.fence1.equals(fence1));
 				}
 				case 3 -> {
-					Node3 node = (Node3) other;
+					InterceptorTask3 node = (InterceptorTask3) other;
 					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence1.equals(fence0) || node.fence1.equals(fence1) || node.fence2.equals(fence0) || node.fence2.equals(fence1));
 				}
 				default -> {
-					NodeX node = (NodeX) other;
+					InterceptorTaskX node = (InterceptorTaskX) other;
 					for (int i = 0; i < node.size; i++) {
 						Object v = node.fences[i];
 						if (v.equals(fence0) || v.equals(fence1)) {
@@ -1034,15 +911,15 @@ public class Threadripper extends AbstractExplorerService {
 		@Override
 		public void release() {
 			this.intercepted = false;
-			Threadripper.this.weakUp(track0);
-			Threadripper.this.weakUp(track1);
+			ReorderExplorer.this.weakUp(track0);
+			ReorderExplorer.this.weakUp(track1);
 		}
 	}
 
 	/**
 	 * 带有3个屏障的节点
 	 */
-	private class Node3 extends AbstractNode {
+	private class InterceptorTask3 extends AbstractInterceptorTask {
 
 		private final int track0;
 
@@ -1056,7 +933,7 @@ public class Threadripper extends AbstractExplorerService {
 
 		private final Object fence2;
 
-		public Node3(Runnable task, Object fence0, Object fence1, Object fence2) {
+		public InterceptorTask3(Runnable task, Object fence0, Object fence1, Object fence2) {
 			super(task, 3);
 			this.track0 = fence0.hashCode() % nThreads;
 			this.track1 = fence1.hashCode() % nThreads;
@@ -1074,10 +951,15 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
+		public Object[] getFences() {
+			return new Object[]{fence0, fence1, fence2};
+		}
+
+		@Override
 		public void weakUp() {
-			Threadripper.this.weakUp(track0);
-			Threadripper.this.weakUp(track1);
-			Threadripper.this.weakUp(track2);
+			ReorderExplorer.this.weakUp(track0);
+			ReorderExplorer.this.weakUp(track1);
+			ReorderExplorer.this.weakUp(track2);
 		}
 
 		@Override
@@ -1086,24 +968,24 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public boolean isAloneTrack() {
+		public boolean isExclusive() {
 			return track0 == track1 && track0 == track2;
 		}
 
 		@Override
-		public boolean isReorder(Node other) {
+		public boolean isAdvance(RunnableInterceptor other) {
 			switch (other.size()) {
 				case 1 -> throw new IllegalStateException();
 				case 2 -> {
-					Node2 node = (Node2) other;
+					InterceptorTask2 node = (InterceptorTask2) other;
 					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence0.equals(fence2) || node.fence1.equals(fence0) || node.fence1.equals(fence1) || node.fence1.equals(fence2));
 				}
 				case 3 -> {
-					Node3 node = (Node3) other;
+					InterceptorTask3 node = (InterceptorTask3) other;
 					return !(node.fence0.equals(fence0) || node.fence0.equals(fence1) || node.fence0.equals(fence2) || node.fence1.equals(fence0) || node.fence1.equals(fence1) || node.fence1.equals(fence2) || node.fence2.equals(fence0) || node.fence2.equals(fence1) || node.fence2.equals(fence2));
 				}
 				default -> {
-					NodeX node = (NodeX) other;
+					InterceptorTaskX node = (InterceptorTaskX) other;
 					for (int i = 0; i < node.size; i++) {
 						Object v = node.fences[i];
 						if (v.equals(fence0) || v.equals(fence1) || v.equals(fence2)) {
@@ -1118,16 +1000,16 @@ public class Threadripper extends AbstractExplorerService {
 		@Override
 		public void release() {
 			this.intercepted = false;
-			Threadripper.this.weakUp(track0);
-			Threadripper.this.weakUp(track1);
-			Threadripper.this.weakUp(track2);
+			ReorderExplorer.this.weakUp(track0);
+			ReorderExplorer.this.weakUp(track1);
+			ReorderExplorer.this.weakUp(track2);
 		}
 	}
 
 	/**
 	 * 带有多个屏障的节点
 	 */
-	private class NodeX extends AbstractNode {
+	private class InterceptorTaskX extends AbstractInterceptorTask {
 
 		/**
 		 * 任务位置
@@ -1141,20 +1023,25 @@ public class Threadripper extends AbstractExplorerService {
 		 */
 		private final Object[] fences;
 
-		public NodeX(Runnable task, Object... fences) {
+		public InterceptorTaskX(Runnable task, Object... fences) {
 			super(task, fences.length);
 			this.fences = fences;
 			for (int i = 0; i < size; i++) {
 				this.bits |= (1L << fences[i].hashCode() % nThreads);
 			}
-			this.forbids = Long.bitCount(bits) - 1;
+			this.forbids = Long.bitCount(bits);
+		}
+
+		@Override
+		public Object[] getFences() {
+			return fences;
 		}
 
 		@Override
 		public void weakUp() {
 			for (int i = 0; i < nThreads; i++) {
 				if ((bits & (1L << i)) != 0) {
-					Threadripper.this.weakUp(i);
+					ReorderExplorer.this.weakUp(i);
 				}
 			}
 		}
@@ -1165,7 +1052,7 @@ public class Threadripper extends AbstractExplorerService {
 		}
 
 		@Override
-		public boolean isAloneTrack() {
+		public boolean isExclusive() {
 			return Long.bitCount(bits) <= 1;
 		}
 
@@ -1176,11 +1063,11 @@ public class Threadripper extends AbstractExplorerService {
 		 * @return {@code true}可以越过当前栅栏，{@code false}不能越过当前栅栏
 		 */
 		@Override
-		public boolean isReorder(Node other) {
+		public boolean isAdvance(RunnableInterceptor other) {
 			switch (other.size()) {
 				case 1 -> throw new IllegalStateException();
 				case 2 -> {
-					Node2 node = (Node2) other;
+					InterceptorTask2 node = (InterceptorTask2) other;
 					for (int i = 0; i < size; i++) {
 						Object fence = fences[i];
 						if (fence.equals(node.fence0) || fence.equals(node.fence1)) {
@@ -1190,7 +1077,7 @@ public class Threadripper extends AbstractExplorerService {
 					return true;
 				}
 				case 3 -> {
-					Node3 node = (Node3) other;
+					InterceptorTask3 node = (InterceptorTask3) other;
 					for (int i = 0; i < size; i++) {
 						Object fence = fences[i];
 						if (fence.equals(node.fence0) || fence.equals(node.fence1) || fence.equals(node.fence2)) {
@@ -1200,7 +1087,7 @@ public class Threadripper extends AbstractExplorerService {
 					return true;
 				}
 				default -> {
-					NodeX node = (NodeX) other;
+					InterceptorTaskX node = (InterceptorTaskX) other;
 					for (int i = 0; i < node.size; i++) {
 						Object v = node.fences[i];
 						for (int j = 0; j < size; j++) {
@@ -1219,9 +1106,28 @@ public class Threadripper extends AbstractExplorerService {
 			this.intercepted = false;
 			for (int i = 0; i < size; i++) {
 				if ((bits & (1L << i)) != 0) {
-					Threadripper.this.weakUp(i);
+					ReorderExplorer.this.weakUp(i);
 				}
 			}
+		}
+	}
+
+	private class SharedInterceptorTask extends InterceptorTaskX {
+
+		public SharedInterceptorTask(Runnable task, Object... fences) {
+			super(task, fences);
+		}
+
+		@Override
+		public boolean tryIntercept() {
+			int v;
+			do {
+				v = forbids;
+			} while (!VV.compareAndSet(this, v, v - 1));
+			if (v > 1) {
+				// add task
+			}
+			return v > 0;
 		}
 	}
 	// endregion
@@ -1267,7 +1173,7 @@ public class Threadripper extends AbstractExplorerService {
 							continue;
 						}
 						long workTime = now - startTime;
-						if (workTime >= TIME) {
+						if (workTime >= time) {
 							System.out.println(workTime);
 						}
 					}
@@ -1291,9 +1197,9 @@ public class Threadripper extends AbstractExplorerService {
 	}
 
 	/**
-	 * 乐观同步器实现
+	 * 同步器
 	 * <p>
-	 * 用于多生产者-单消费者模型中的消费者唤醒。判断事件总线读取期间，是否有新事件进入。
+	 * 用于多生产者-单消费者模型中的消费者唤醒。判断事件总线读取期间，是否有新事件写入。
 	 */
 	@Contended
 	private static class Sync implements OptimisticSynchronizer {
@@ -1316,8 +1222,19 @@ public class Threadripper extends AbstractExplorerService {
 		 */
 		private volatile boolean blocked;
 
-		final Thread thread;
+		/**
+		 * 绑定线程
+		 * <p>
+		 * 同步器与线程是绑定的，{@link #acquireWrite()}，版本变更时，
+		 * 有可能需要唤醒等待中的线程。
+		 */
+		private final Thread thread;
 
+		/**
+		 * 构造绑定线程的同步器
+		 *
+		 * @param thread 绑定线程
+		 */
 		private Sync(Thread thread) {
 			this.thread = thread;
 		}

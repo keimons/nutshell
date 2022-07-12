@@ -1,6 +1,6 @@
 package com.keimons.nutshell.explorer.support;
 
-import com.keimons.nutshell.explorer.Interceptor;
+import com.keimons.nutshell.core.Interceptor;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;

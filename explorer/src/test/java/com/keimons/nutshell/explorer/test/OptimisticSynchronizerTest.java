@@ -1,7 +1,7 @@
 package com.keimons.nutshell.explorer.test;
 
 import com.keimons.nutshell.core.OptimisticSynchronizer;
-import com.keimons.nutshell.explorer.support.Threadripper;
+import com.keimons.nutshell.explorer.support.ReorderExplorer;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.ExecutionException;
@@ -20,7 +20,7 @@ public class OptimisticSynchronizerTest {
 
 	@Test
 	public void test() throws ExecutionException, InterruptedException {
-		Threadripper explorer = new Threadripper(2);
+		ReorderExplorer explorer = new ReorderExplorer(2);
 		for (int i = 0; i < 2_0000_0000; i++) {
 			if ((i & 0B11) == 0B11) {
 				Future<?> future = explorer.submit(TASK, 0);
