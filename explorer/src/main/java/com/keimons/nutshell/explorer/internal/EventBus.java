@@ -32,8 +32,7 @@ import org.jetbrains.annotations.Nullable;
  * <p>
  * <p>
  * <p>
- * {@code IO线程 -> 派发线程 -> work线程}的模式能够避免任务的交叉投递，但是增加了一次额外的派发。
- * 取消{@code 派发线程}，则有可能产生交叉投递问题。按照顺序投递（KeyC + KeyA也按照先投递KeyA，再投递KeyC），也可能产生的交叉投递问题如下：
+ * 按照顺序投递（KeyC + KeyA也按照先投递KeyA，再投递KeyC），可能产生的交叉投递问题如下：
  * <pre>
  * IO-Thread-1, commit task1: KeyA + KeyB
  * IO-Thread-2, commit task2: KeyB + KeyC
@@ -54,21 +53,25 @@ import org.jetbrains.annotations.Nullable;
  * QueueB --> task2, task1 --> Thread-2
  * QueueC --> task3, task2 --> Thread-3
  * </pre>
- * 此时任务出现交叉，产生死锁。在不添加派发线程的前提下，升级环形队列，增加一个维度，每个线程仅仅读取指定槽位的Key，如果当前位置为空，则表示没有任务，跳过执行。示意如下：
+ * 此时任务出现交叉，任务的交叉不仅仅是执行顺序不定，更会产生死锁。
+ * <p>
+ * 事件总线升级为二维队列，每个线程仅仅读取指定的维度，如果当前位置为空，则表示不关注这个任务，跳过执行。示意如下：
  * <pre>
- *           writeIndex
- *           |
- *           +---------------------------+    +---------------------+
- * QueueA -> | Key1 | Key1 |      | Key1 | -> | Thread-1, readIndex |
- *           |------+------+------+------|    |---------------------|
- * QueueB -> |      | Key2 | Key2 |      | -> | Thread-2, readIndex |
- *           |------+------+------+------|    |---------------------|
- * QueueC -> | Key3 |      | Key3 |      | -> | Thread-3, readIndex |
- *           +---------------------------+    +---------------------+
- *              |      |      |      |
- *            task3  task1  task2  task0
+ *             writeIndex
+ *             |
+ * +----------------EventBus-----------------+
+ * |           +---------------------------+ |   +---------------------+
+ * | TrackA -> | Key1 | Key1 |      | Key1 | |-> | Thread-1, readIndex |
+ * |           |------+------+------+------| |   |---------------------|
+ * | TrackB -> |      | Key2 | Key2 |      | |-> | Thread-2, readIndex |
+ * |           |------+------+------+------| |   |---------------------|
+ * | TrackC -> | Key3 |      | Key3 |      | |-> | Thread-3, readIndex |
+ * |           +---------------------------+ |   +---------------------+
+ * +-----------------------------------------+
+ *                |      |      |      |
+ *              task3  task1  task2  task0
  * </pre>
- * 由IO线程生成任务信息并发布在环形Buffer总线上。环形buffer中发布的，不再是单个任务，而是包含Key组的任务，Key组中可能包含一个或多个Key。
+ * 由生产者生成任务信息并发布在EventBus上。事件总线中发布的，不再是普通的任务，而是包含一个或多个执行屏障的任务。
  * 仅仅维护一个全局的{@code writeIndex}，每个线程维护自己的{@code readIndex}，只要{@code readIndex < writeIndex}
  * 则可以继续向下读取，如果当前位置为空，则表明此任务不是这个线程关注的任务，跳过执行，联合{@link RunnableInterceptor}使用。
  * <p>

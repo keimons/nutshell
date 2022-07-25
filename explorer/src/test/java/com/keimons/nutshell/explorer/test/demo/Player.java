@@ -9,7 +9,7 @@ package com.keimons.nutshell.explorer.test.demo;
  */
 public class Player {
 
-	private long playerId;
+	private final long playerId;
 
 	public Player(long playerId) {
 		this.playerId = playerId;

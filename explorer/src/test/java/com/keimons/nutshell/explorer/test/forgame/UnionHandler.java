@@ -29,6 +29,28 @@ public class UnionHandler {
 		}
 	}
 
+	@MsgCode(opCode = 1002, dispatch = true, desc = "组织改名", strategies = PlayerIdAndUnionIdPolicy.class)
+	public Object modifyName() {
+		// //记录角色名即将被使用
+		// names.put(name, curr + 5 * Time.SEC);
+
+		// sync db check name.
+		// sync flush modify to db.
+		return null;
+	}
+
+	public static class IdsAndNamePolicy implements FenceStrategy {
+
+		@Override
+		public Object[] getFences(Player player, JsonObject request) {
+			return new Object[]{
+					player.getPlayerId(),
+					player.getUnionId(),
+					request.getString("nickname")
+			};
+		}
+	}
+
 	public static class PlayerIdAndUnionIdPolicy implements FenceStrategy {
 
 		@Override

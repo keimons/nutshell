@@ -25,7 +25,7 @@ public class ParkInterceptor implements Interceptor {
 	/**
 	 * 拦截量
 	 */
-	private int forbids;
+	private final int forbids;
 	/**
 	 * 写入位置
 	 */

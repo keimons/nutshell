@@ -20,6 +20,12 @@ public class UnionExecutor {
 		// 略 init(WORKERS);
 	}
 
+	/**
+	 * 执行帮派相关任务
+	 *
+	 * @param task  任务
+	 * @param union 帮派
+	 */
 	public void execute(Runnable task, Union union) {
 		int index = union.getUnionId() % DEFAULT_N_THREAD;
 		WORKERS[index].offer(task);

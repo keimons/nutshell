@@ -2,6 +2,7 @@ package com.keimons.nutshell.explorer.utils;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.function.Supplier;
 
 /**
  * 各种工具类
@@ -19,5 +20,12 @@ public class MiscUtils {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	public static <T> T[] fill(T[] objs, Supplier<T> creator) {
+		for (int i = 0; i < objs.length; i++) {
+			objs[i] = creator.get();
+		}
+		return objs;
 	}
 }

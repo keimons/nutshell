@@ -16,7 +16,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class Worker {
 
-	private BlockingQueue<Runnable> tasks = new LinkedBlockingQueue<>();
+	private final BlockingQueue<Runnable> tasks = new LinkedBlockingQueue<>();
 
 	public void offer(Runnable task) {
 		tasks.offer(task);

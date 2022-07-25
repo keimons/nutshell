@@ -3,6 +3,13 @@ package com.keimons.nutshell.explorer.test.forgame;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 模拟JSON工具
+ *
+ * @author houyn[monkey@keimons.com]
+ * @version 1.0
+ * @since 17
+ */
 public class JsonObject {
 
 	private final Map<String, Object> json = new HashMap<>();
