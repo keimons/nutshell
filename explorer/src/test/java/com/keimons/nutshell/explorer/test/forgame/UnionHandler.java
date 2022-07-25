@@ -29,7 +29,7 @@ public class UnionHandler {
 		}
 	}
 
-	@MsgCode(opCode = 1002, dispatch = true, desc = "组织改名", strategies = PlayerIdAndUnionIdPolicy.class)
+	@MsgCode(opCode = 1002, dispatch = true, desc = "组织改名", strategies = IdsAndNamePolicy.class)
 	public Object modifyName() {
 		// //记录角色名即将被使用
 		// names.put(name, curr + 5 * Time.SEC);
